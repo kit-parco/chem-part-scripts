@@ -1,15 +1,14 @@
 
 # coding: utf-8
 
-# In[1]:
+# In[ ]:
 
 # %load chempartlib.py
 from networkit import *
-import math, sys, subprocess
-import time
+import math, sys, subprocess, functools, operator, time, random
 
 
-# In[2]:
+# In[ ]:
 
 def getCutWeight(G, part, v, block):
     n = G.numberOfNodes()
@@ -21,11 +20,11 @@ def getCutWeight(G, part, v, block):
     return sum([G.weight(v, u) for u in G.nodes() if G.hasEdge(v,u) and part[u] == block])
 
 
-# In[3]:
+# In[ ]:
 
-def continuousPartition(G, X, tolerance, k=0, isCharged=[]):
+def dpPartition(G, k, imbalance, isCharged=[]):
     """
-    Partition G into subsets of size X +/- tolerance and with consecutive node ids.
+    Partition G into subsets of size at most math.ceil(n/k)*(1+imbalance) and with consecutive node ids.
     Charged nodes are not grouped into the same subset.
     """
 
@@ -33,80 +32,73 @@ def continuousPartition(G, X, tolerance, k=0, isCharged=[]):
     n = G.numberOfNodes()
     if len(isCharged) > 0:
         assert(len(isCharged)==n)
-        if k > 0:
-            assert(sum(isCharged) <= k)
+        assert(sum(isCharged) <= k)
     else:
         isCharged = [False for i in range(n)]
-    assert(X > 0)
-    assert(tolerance >= 0)
-    if (n % X > 0 or (k>0 and k*X != n)) and tolerance == 0:
-        if (k > 0):
-            print("Creating", k, "partitions of size", X, "from a graph with", n, " nodes and tolerance 0 is impossible.")
-        else:
-            print("Creating partitions of size", X, "from a graph with", n, " nodes and tolerance 0 is impossible.")
-        print("Set tolerance to 1.")
-        tolerance = 1
-        
-    if k > 0:
-        assert(n <= (X + tolerance)*k)
-        assert(n >= (X - tolerance)*k)
-        
-    maxNumberOfPartitions = int(n / max(X - tolerance, 1)) if (k == 0) else k
-    
-    def w(i,l):
-        """
-        Weight of cutting after node i.
-        """
-        assert(i >= 0)
-        assert(i < n)
-        weightSum = 0
-        for k in range(l+1,i+1):
-            for neighbor in G.neighbors(k):
-                if neighbor <= l or neighbor > i:
-                    weightSum += G.weight(k, neighbor)
-        return weightSum
+    assert(k > 0)
+    assert(k <= n)
+    assert(imbalance >= 0)
+    maxBlockSize = int(math.ceil(n / k)*(1+imbalance))
     
     # allocate cut and predecessor table
-    table = [[float("inf") for j in range(maxNumberOfPartitions)] for i in range(n)]
-    pred = [[-1 for j in range(maxNumberOfPartitions)] for i in range(n)]
+    table = [[float("inf") for j in range(k)] for i in range(n)]
+    pred = [[-1 for j in range(k)] for i in range(n)]
     
-    # fill table 
-    for i in range(n):
-        for j in range(maxNumberOfPartitions):
-            if (j == 0):
-                if abs(i+1-X) <= tolerance:
-                    table[i][j] = w(i,-1)
-            elif (i >= (X-tolerance)):
-                windowStart = max(i-(X+tolerance),0)
+    # fill values for the first fragment
+    chargeEncountered = False
+    weightSum = 0
+    for i in range(maxBlockSize):    
+        # a fragment may only contain one charge, stop when a second one is encountered
+        if isCharged[i]:
+            if chargeEncountered:
+                break
+            else:
+                chargeEncountered = True
                 
-                # make sure that no two charged nodes are in the same partition
-                chargeEncountered = False
-                for l in reversed(range(windowStart, i+1)):
-                    assert(l >= windowStart)
-                    if isCharged[l]:
-                        if chargeEncountered:
-                            windowStart = l
-                            break
-                        else:
-                            chargeEncountered = True
+        # update current weight sum
+        for neighbor in G.neighbors(i):
+            if neighbor > i:
+                weightSum += G.weight(i,neighbor)
+            elif neighbor < i:
+                weightSum -= G.weight(i,neighbor)
                 
-                predList = [table[l][j-1] + w(i,l) for l in range(windowStart, min(i,i-(X-tolerance)+1))]
-                if (len(predList) > 0):
-                    minPred = min(predList)
-                    table[i][j] = minPred
-                    pred[i][j] = predList.index(minPred) + windowStart
+        table[i][0] = weightSum
+        
+    # fill remaining values 
+    for i in range(n):      
+        windowStart = max(i-maxBlockSize,0)
+              
+        # make sure that no two charged nodes are in the same partition
+        chargeEncountered = False
+        for l in reversed(range(windowStart, i+1)):
+            assert(l >= windowStart)
+            if isCharged[l]:
+                if chargeEncountered:
+                    windowStart = l
+                    break
+                else:
+                    chargeEncountered = True
+                    
+        # fill cost array
+        costArray = []
+        cutWeight = 0
+        for l in reversed(range(windowStart, i+1)):
+            for neighbor in G.neighbors(l):
+                # we count only edges to nodes with higher ids, to avoid double counting
+                if neighbor > i:
+                    cutWeight += G.weight(l,neighbor)
+            costArray.append(cutWeight)
+        
+        # calculate optimal next fragment
+        for j in range(1,k):
+            predList = [table[l][j-1] + costArray[i-l-1] for l in range(windowStart, i)]
+            if (len(predList) > 0):
+                minPred = min(predList)
+                table[i][j] = minPred
+                pred[i][j] = predList.index(minPred) + windowStart
                                       
     # get result from table
-    resultlist = [table[n-1][j] for j in range(maxNumberOfPartitions)]
-    if len(resultlist) == 0:
-        raise ValueError("Combination of parameters allows no partition!")
-    
-    # if k is given, select best solution with k subsets. If not, select best overall solution
-    if (k == 0):
-        bestCutValue = min(resultlist)
-        k = resultlist.index(bestCutValue) + 1
-    else:
-        bestCutValue = table[n-1][k-1]
+    bestCutValue = table[n-1][k-1]
         
     if (bestCutValue == float("inf")):
         raise ValueError("Combination of parameters allows no partition!")
@@ -116,7 +108,6 @@ def continuousPartition(G, X, tolerance, k=0, isCharged=[]):
     # search best path backwards
     j = k-1
     i = n-1
-    c = bestCutValue
     
     while (j > 0):
         nextI = pred[i][j]
@@ -125,7 +116,6 @@ def continuousPartition(G, X, tolerance, k=0, isCharged=[]):
         for l in range(nextI+1, i+1):
             result[l] = j
         j -= 1
-        c -=w(i,nextI)
         i = nextI
         
     # assign partitions to first nodes not covered by previous loop
@@ -137,15 +127,223 @@ def continuousPartition(G, X, tolerance, k=0, isCharged=[]):
         assert(result[i] >= 0)
         assert(result[i] < k)
         
+    #if table[n-1][k-1] != partitioning.computeEdgeCut(result, G):
+    #    print(table[n-1][k-1], 'vs', partitioning.computeEdgeCut(result, G))
+        
     for size in result.subsetSizes():
-        if (abs(size-X) > tolerance):
-            print("For n=", n, ", k=", k, ", X=", X, ", tolerance=", tolerance, ", ", size, " is wrong.")
-        assert(abs(size-X) <= tolerance)
+        if (size > maxBlockSize):
+            print("For n=", n, ", k=", k, "imbalance=", maxImbalance , ", ", size, " is wrong.")
+        assert(size <= maxBlockSize)
     
     return result
 
 
-# In[4]:
+# In[ ]:
+
+def naivePartition(G, k):
+    """
+    Chop a new fragment off G every n/k nodes
+    """
+    n = G.numberOfNodes()
+    naivePart = partitioning.Partition(n)
+    naivePart.allToSingletons()
+    for i in range(n):
+        naivePart.moveToSubset(int(i/math.ceil(n/k)), i)
+    naivePart.compact()
+    return naivePart
+
+
+# In[ ]:
+
+def greedyPartition(G, k, imbalance, isCharged=[]):
+    """
+    Starting with singleton clusters, greedily merge the heaviest edge as long as it is smaller than sizelimit.
+    """
+    n = G.numberOfNodes()
+    if len(isCharged) > 0:
+        assert(len(isCharged)==n)
+    else:
+        isCharged = [False for i in range(n)]
+    n = G.numberOfNodes()
+    part = partitioning.Partition(n)
+    part.allToSingletons()
+    chargedPartitions = set([part.subsetOf(i) for i in range(n) if isCharged[i]])
+    sizelimit = int(math.ceil(n / k)*(1+imbalance))
+    remainingFragments = n
+
+    
+    def getWeight(edge):
+        return G.weight(edge[0], edge[1])
+    
+    sortedEdges = sorted(G.edges(), key=getWeight)
+    
+    # merge heaviest edge, as long as allowed
+    while len(sortedEdges) > 0:
+        allowed = True
+        heaviestEdge = sortedEdges.pop()
+        firstPart = part.subsetOf(heaviestEdge[0])
+        secondPart = part.subsetOf(heaviestEdge[1])
+        if firstPart in chargedPartitions and secondPart in chargedPartitions:
+            allowed = False
+        sizeMap = part.subsetSizeMap()
+        if sizeMap[firstPart] + sizeMap[secondPart] > sizelimit:
+            allowed = False
+        partSet = {firstPart, secondPart}
+        for i in range(n-2):
+            if part[i] in partSet and part[i+2] in partSet and not part[i+1] in partSet:
+                allowed = False #otherwise, would create single embedded node
+        if allowed:
+            part.mergeSubsets(firstPart, secondPart)
+            remainingFragments -= 1
+            if firstPart in chargedPartitions or secondPart in chargedPartitions:
+                chargedPartitions.add(part.subsetOf(heaviestEdge[0]))
+    
+    part.compact()
+    return part
+
+
+# In[ ]:
+
+def mlPartition(G, k, imbalance, isCharged=[]):
+    """
+    Use a multi-level approach with Fiduccia-Matheyses to partition G.
+
+    Subsets have size at most (1+imbalance)*ceil(n/k)
+    """
+    n = G.numberOfNodes()
+    if len(isCharged) > 0:
+        assert(len(isCharged)==n)
+        if k > 0:
+            assert(sum(isCharged) <= k)
+    else:
+        isCharged = [False for i in range(n)]
+    
+    listOfChargedNodes = [i for i in range(n) if isCharged[i]]
+    greedy = greedyPartition(G, k, imbalance, isCharged)
+    try:
+        dynamic = dpPartition(G, k, imbalance, isCharged)
+        if partitioning.computeEdgeCut(greedy, G) < partitioning.computeEdgeCut(dynamic, G):
+            initial = greedy
+        else:
+            initial = dynamic
+    except ValueError:
+        initial = greedy
+    # Problem: The single node repair in C++ may create invalid partitions.
+    # Better to not use it and repair in Python.
+    mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, False, listOfChargedNodes, False, initial)
+    mlp.run()
+    return mlp.getPartition()
+
+
+# In[ ]:
+
+def kaHiPWrapper(G, k, imbalance = 0.2, pathToKaHiP = '/home/moritzl/Gadgets/KaHIP/deploy/kaffpa', multiple=False):
+    """
+    Calls KaHiP, an external partitioner.
+    """
+    
+    tempFileName = 'tempForKaHiP.graph'
+    outputFileName = 'tmppartition'+str(k)
+    n = G.numberOfNodes()
+    
+    maxWeight = max([G.weight(u,v) for (u,v) in G.edges()])
+    
+    """
+    KaHiP only accepts integer weights, thus we scale and round them.
+    Weights must be under 1 million, otherwise the METIS graph writer switches to scientific notation,
+    which confuses KaHiP
+    """
+    scalingFactor = int((10**6-1)/maxWeight)
+    
+    
+    #copy and scale graph
+    Gscaled = G.copyNodes()
+    for (u,v) in G.edges():
+        Gscaled.addEdge(u,v,int(G.weight(u,v)*scalingFactor))
+    
+    # write out temporary file
+    writeGraph(Gscaled, tempFileName, Format.METIS)
+    
+    # call KaHIP
+    callList = [pathToKaHiP, '--k='+str(k), '--imbalance='+str(int(imbalance*100)), '--preconfiguration=strong']
+    if multiple:
+        callList.append('--time_limit=1')
+    callList.append(tempFileName)
+    subprocess.call(callList)
+    
+    # read in partition
+    part = community.PartitionReader().read(outputFileName)
+    
+    # remove temporary files
+    subprocess.call(['rm', tempFileName])
+    subprocess.call(['rm', outputFileName])
+    
+    return part
+
+
+# In[ ]:
+
+def getBestCut(G, k, imbalance, isCharged = []):
+    """
+    Executes the multilevel, greedy and dynamic programming algorithm, also calls KaHiP if available.
+    Returns the result yielding the best cut weight.
+    """
+    n = G.numberOfNodes()
+    if len(isCharged) == 0:
+        isCharged = [False for v in range(G.numberOfNodes())]
+    sizelimit = int(math.ceil(n / k)*(1+imbalance))
+    
+    ml = mlPartition(G, k, imbalance, isCharged)
+    if not partitionValid(G, ml, sizelimit, isCharged):
+        ml = repairPartition(G, ml, imbalance, isCharged)
+    result = ml
+    resultWeight = partitioning.computeEdgeCut(result, G)
+        
+    greedy = greedyPartition(G, k, imbalance, isCharged)
+    if not partitionValid(G, greedy, sizelimit, isCharged):
+        greedy = repairPartition(G, greedy, imbalance, isCharged)
+        assert(partitionValid(G, greedy, sizelimit, isCharged))
+    cutWeight = partitioning.computeEdgeCut(greedy, G)
+    if cutWeight < resultWeight:
+        result = greedy
+        resultWeight = cutWeight
+    
+    try:
+        cont = dpPartition(G, k, imbalance, isCharged)
+        assert(partitionValid(G, cont, sizelimit, isCharged))
+        cutWeight = partitioning.computeEdgeCut(cont, G)
+        if cutWeight < resultWeight:
+            result = cont
+            resultWeight = cutWeight
+    except ValueError as e:
+        print(e)
+        print("Continuing with other partitioners.")
+
+    try:
+        ka = kaHiPWrapper(G, k, imbalance)
+        if not partitionValid(G, ka, sizelimit, isCharged):
+            ka = repairPartition(G, ka, imbalance, isCharged)
+        cutWeight = partitioning.computeEdgeCut(ka, G)
+        if cutWeight < resultWeight:
+            result = ka
+            resultWeight = cutWeight
+    except FileNotFoundError as e:
+        print("Could not find KaHiP:",e)
+        print("Continuing with other partitioners.")
+        
+    naive = naivePartition(G, k)
+    if not partitionValid(G, naive, sizelimit, isCharged):
+        naive = repairPartition(G, naive, imbalance, isCharged)        
+        assert(partitionValid(G, naive, sizelimit, isCharged))
+    cutWeight = partitioning.computeEdgeCut(naive, G)
+    if cutWeight < resultWeight:
+        result = naive
+        resultWeight = cutWeight
+        
+    return result
+
+
+# In[ ]:
 
 def spiralLayout(G, k, rowheight = 10, colwidth = 10):
     """
@@ -185,88 +383,7 @@ def spiralLayout(G, k, rowheight = 10, colwidth = 10):
     return x, y
 
 
-# In[5]:
-
-def naivePartition(G, X):
-    """
-    Chop a new fragment off G every X nodes
-    """
-    n = G.numberOfNodes()
-    naivePart = partitioning.Partition(n)
-    naivePart.allToSingletons()
-    for i in range(n):
-        naivePart.moveToSubset(int(i/X), i)
-    return naivePart
-
-
-# In[6]:
-
-def mlPartition(G, k, imbalance, isCharged=[]):
-    """
-    Use a multi-level approach with Fiduccia-Matheyses to partition G.
-
-    Subsets have size at most (1+imbalance)*ceil(n/k)
-    """
-    n = G.numberOfNodes()
-    if len(isCharged) > 0:
-        assert(len(isCharged)==n)
-        if k > 0:
-            assert(sum(isCharged) <= k)
-    else:
-        isCharged = [False for i in range(n)]
-    
-    listOfChargedNodes = [i for i in range(n) if isCharged[i]]
-    mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, False, listOfChargedNodes, True)
-    mlp.run()
-    return mlp.getPartition()
-
-
-# In[7]:
-
-def greedyPartition(G, sizelimit, isCharged=[]):
-    """
-    Starting with singleton clusters, greedily merge the heaviest edge as long as smaller than sizelimit.
-    """
-    n = G.numberOfNodes()
-    if len(isCharged) > 0:
-        assert(len(isCharged)==n)
-    else:
-        isCharged = [False for i in range(n)]
-    n = G.numberOfNodes()
-    part = partitioning.Partition(n)
-    part.allToSingletons()
-    chargedPartitions = set([part.subsetOf(i) for i in range(n) if isCharged[i]])
-    
-    def getWeight(edge):
-        return G.weight(edge[0], edge[1])
-    
-    sortedEdges = sorted(G.edges(), key=getWeight)
-    
-    # merge heaviest edge, as long as allowed
-    while len(sortedEdges) > 0:
-        allowed = True
-        heaviestEdge = sortedEdges.pop()
-        firstPart = part.subsetOf(heaviestEdge[0])
-        secondPart = part.subsetOf(heaviestEdge[1])
-        if firstPart in chargedPartitions and secondPart in chargedPartitions:
-            allowed = False
-        sizeMap = part.subsetSizeMap()
-        if sizeMap[firstPart] + sizeMap[secondPart] > sizelimit:
-            allowed = False
-        partSet = {firstPart, secondPart}
-        for i in range(n-2):
-            if part[i] in partSet and part[i+2] in partSet and not part[i+1] in partSet:
-                allowed = False #otherwise, would create single embedded node
-        if allowed:
-            part.mergeSubsets(firstPart, secondPart)
-            if firstPart in chargedPartitions or secondPart in chargedPartitions:
-                chargedPartitions.add(part.subsetOf(heaviestEdge[0]))
-    
-    part.compact()
-    return part
-
-
-# In[8]:
+# In[ ]:
 
 def exportToGephi(G, xcoords, ycoords, part):
     """
@@ -278,9 +395,10 @@ def exportToGephi(G, xcoords, ycoords, part):
     client.exportNodeValues(G, part, "partition")
     client.exportNodeValues(G, xcoords, 'x')
     client.exportNodeValues(G, [-elem for elem in ycoords], 'y')
+    client.exportEdgeValues(G, [G.weight(u,v) for u,v in G.edges()], 'Weight')
 
 
-# In[9]:
+# In[ ]:
 
 def moveAllowed(G, partition, v, targetBlock, maxBlockSize = 0, isCharged = []):
     """
@@ -322,7 +440,7 @@ def moveAllowed(G, partition, v, targetBlock, maxBlockSize = 0, isCharged = []):
     
 
 
-# In[10]:
+# In[ ]:
 
 def getCutWeights(G, part, v):
     """
@@ -343,17 +461,24 @@ def getCutWeights(G, part, v):
     return sums
 
 
-# In[11]:
+# In[ ]:
 
-def repairPartition(G, partition, maxBlockSize = 0, isCharged = []):
+def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
     """
-    Repairs errors in partition, for example multiple charged nodes in the same partition or gaps of size 1
+    Repairs errors in partition, for example multiple charged nodes in the same partition or gaps of size 1.
+    TODO: As of now, this method contains bugs and does not guarantee a valid partition after a run.
     """
     z = G.upperNodeIdBound()
+    n = G.numberOfNodes()
     assert(len(partition) == z)
     assert(len(isCharged) == 0 or len(isCharged) == z)
     if len(isCharged) == 0:
         isCharged = [False for i in range(z)]
+        
+    k = len(set(partition))
+        
+    maxBlockSize = int(math.ceil(n / k)*(1+imbalance))
+
     
     fragmentSet = {partition[v] for v in range(len(partition))}
     
@@ -383,53 +508,7 @@ def repairPartition(G, partition, maxBlockSize = 0, isCharged = []):
     return partition
 
 
-# In[12]:
-
-def kaHiPWrapper(G, k, imbalance = 3, pathToKaHiP = '/home/moritzl/Gadgets/KaHIP/deploy/kaffpa', multiple=False):
-    """
-    Calls KaHiP, an external partitioner.
-    """
-    
-    tempFileName = 'tempForKaHiP.graph'
-    outputFileName = 'tmppartition'+str(k)
-    n = G.numberOfNodes()
-    
-    maxWeight = max([G.weight(u,v) for (u,v) in G.edges()])
-    
-    """
-    KaHiP only accepts integer weights, thus we scale and round them.
-    Weights must be under 1 million, otherwise the METIS graph writer switches to scientific notation,
-    which confuses KaHiP
-    """
-    scalingFactor = int((10**6-1)/maxWeight)
-    
-    
-    #copy and scale graph
-    Gscaled = G.copyNodes()
-    for (u,v) in G.edges():
-        Gscaled.addEdge(u,v,int(G.weight(u,v)*scalingFactor))
-    
-    # write out temporary file
-    writeGraph(Gscaled, tempFileName, Format.METIS)
-    
-    # call KaHIP
-    callList = [pathToKaHiP, '--k='+str(k), '--imbalance='+str(imbalance), '--preconfiguration=strong']
-    if multiple:
-        callList.append('--time_limit=1')
-    callList.append(tempFileName)
-    subprocess.call(callList)
-    
-    # read in partition
-    part = community.PartitionReader().read(outputFileName)
-    
-    # remove temporary files
-    subprocess.call(['rm', tempFileName])
-    subprocess.call(['rm', outputFileName])
-    
-    return part
-
-
-# In[13]:
+# In[ ]:
 
 def partitionValid(G, partition, maxBlockSize = 0, isCharged = []):
     z = G.upperNodeIdBound()
@@ -481,97 +560,183 @@ def partitionValid(G, partition, maxBlockSize = 0, isCharged = []):
     return True
 
 
-# In[19]:
+# In[ ]:
 
-def comparePartitionQuality(G, k, imbalance, chargedNodes = set()):
+def chargesValid(G, klist, minEpsilon, isCharged):
+    assert(type(klist) is list)
+    assert(type(minEpsilon) is float)
+    assert(type(isCharged) is list)
+    assert(len(isCharged) == G.numberOfNodes())
+    for k in klist:
+        try:
+            part = dpPartition(G, k, minEpsilon, isCharged)
+        except ValueError as e:
+            return False
+    return True
+
+
+# In[ ]:
+
+def comparePartitionQuality(G, k, imbalance, chargedNodes = set(), silent=False):
     n = G.numberOfNodes()
     
     isCharged = [v in chargedNodes for v in range(G.numberOfNodes())]
     sizelimit = int(math.ceil(n / k)*(1+imbalance))
+    if not silent:
+        print("Size limit:", sizelimit)
     result = {}
     
+    before = time.time()
     ml = mlPartition(G, k, imbalance, isCharged)
-    print("MultiLevel:", partitioning.computeEdgeCut(ml, G))
+    timeML = time.time() - before
+    if not silent:
+        print("MultiLevel:", partitioning.computeEdgeCut(ml, G))
+        print("Time:", timeML)
     if not partitionValid(G, ml, sizelimit, isCharged):
-        ml = repairPartition(G, ml, sizelimit, isCharged)
-        print("Repaired Multilevel:", partitioning.computeEdgeCut(ml, G))
-        assert(partitionValid(G, ml, sizelimit, isCharged))
-
-    print()
+        ml = repairPartition(G, ml, imbalance, isCharged)
+        if not silent:
+            print("Repaired Multilevel:", partitioning.computeEdgeCut(ml, G))
+            partitionValid(G, ml, sizelimit, isCharged)
+    if not silent:
+        print("Effective k", str(ml.numberOfSubsets()))
+        print()
     result['ml'] = partitioning.computeEdgeCut(ml, G)
     
-    greedy = greedyPartition(G, sizelimit, isCharged)
-    print("Greedy:", partitioning.computeEdgeCut(greedy, G))
+    before = time.time()
+    greedy = greedyPartition(G, k, imbalance, isCharged)
+    timeGreedy = time.time() - before
+    if not silent:
+        print("Greedy:", partitioning.computeEdgeCut(greedy, G))
+        print("Time:", timeGreedy)
     if not partitionValid(G, greedy, sizelimit, isCharged):
-        greedy = repairPartition(G, greedy, sizelimit, isCharged)
-        print("Repaired Greedy:", partitioning.computeEdgeCut(greedy, G))
+        greedy = repairPartition(G, greedy, imbalance, isCharged)
+        if not silent:
+            print("Repaired Greedy:", partitioning.computeEdgeCut(greedy, G))
         assert(partitionValid(G, greedy, sizelimit, isCharged))
-        
-    print()
+    if not silent:
+        print("Effective k", str(greedy.numberOfSubsets()))
+        print()
     result['greedy'] = partitioning.computeEdgeCut(greedy, G)
     
     X = int(n / k)
     tolerance = int(math.ceil(n / k)*(1+imbalance)) - X
     
     try:
-        cont = continuousPartition(G, X, tolerance, k, isCharged)
-        print("Dynamic Programming:", partitioning.computeEdgeCut(cont, G))
+        before = time.time()
+        cont = dpPartition(G, k, imbalance, isCharged)
+        timeDP = time.time() - before
+        if not silent:
+            print("Dynamic Programming:", partitioning.computeEdgeCut(cont, G))
+            print("Time:", timeDP)
         if not partitionValid(G, cont, sizelimit, isCharged):
-            cont = repairPartition(G, cont, sizelimit, isCharged)
-            print("Repaired Dynamic:", partitioning.computeEdgeCut(cont, G))
+            cont = repairPartition(G, cont, imbalance, isCharged)
+            if not silent:
+                print("Repaired Dynamic:", partitioning.computeEdgeCut(cont, G))
             assert(partitionValid(G, cont, sizelimit, isCharged))
         result['cont'] = partitioning.computeEdgeCut(cont, G)
-        
+        if not silent:
+            print("Effective k", str(cont.numberOfSubsets()))
     except ValueError as e:
         print(e)
 
     print()
-    
-    
-    result['bestOfThree'] = min([result[key] for key in result])
-    
-    ka = kaHiPWrapper(G, k, imbalance*100)
-    print("Raw KaHIP:", partitioning.computeEdgeCut(ka, G))
+        
+    before = time.time()
+    ka = kaHiPWrapper(G, k, imbalance)
+    timeKa = time.time() - before
+    if not silent:
+        print("Raw KaHIP:", partitioning.computeEdgeCut(ka, G))
+        print("Time:", timeKa)
     if not partitionValid(G, ka, sizelimit, isCharged):
-        ka = repairPartition(G, ka, sizelimit, isCharged)
-        print("Repaired KaHiP:", partitioning.computeEdgeCut(ka, G))
-        assert(partitionValid(G, ka, sizelimit, isCharged))
-    print()
+        ka = repairPartition(G, ka, imbalance, isCharged)
+        if not silent:
+            print("Repaired KaHiP:", partitioning.computeEdgeCut(ka, G))
+            partitionValid(G, ka, sizelimit, isCharged)
+    if not silent:
+        print("Effective k", str(ka.numberOfSubsets()))
+        print()
     result['ka'] = partitioning.computeEdgeCut(ka, G)
+    result['bestOfFour'] = min([result[key] for key in result])
 
-    
-    naive = naivePartition(G, X)
-    print("Naive:", partitioning.computeEdgeCut(naive, G))
+
+    before = time.time()
+    naive = naivePartition(G, k)
+    timeNaive = time.time() - before
+    if not silent:
+        print("Naive:", partitioning.computeEdgeCut(naive, G))
+        print("Time:", timeNaive)
     if not partitionValid(G, naive, sizelimit, isCharged):
-        naive = repairPartition(G, naive, sizelimit, isCharged)        
-        print("Repaired Naive:", partitioning.computeEdgeCut(naive, G))
+        naive = repairPartition(G, naive, imbalance, isCharged)        
+        if not silent:
+            print("Repaired Naive:", partitioning.computeEdgeCut(naive, G))
         assert(partitionValid(G, naive, sizelimit, isCharged))
+    if not silent:
+        print("Effective k", str(naive.numberOfSubsets()))
     result['naive'] = partitioning.computeEdgeCut(naive, G)
     result['bestOfFive'] = min([result[key] for key in result])
 
-    
+    if not silent:
+        print(str(result['bestOfFour'] / result['naive']))
     return result
 
 
-# In[20]:
+# In[ ]:
 
-def main(numberOfChargedNodes = 5):
-    pathPrefix = "/home/moritzl/NetworKit/chemfork/NetworKit-chemfork/input/"
-    Gnames = ["ubiquitin", "bacteriorhodopsin-10-2.5", "bacteriorhodopsin-10-5", "bacteriorhodopsin-10-10", "bubble"]
+def readCharges(path):
+    """
+    Reads file at path, returns a list of charged nodes
+    """
+    chargedNodes = []
+    
+    with open(path, 'r') as f:
+        for line in f:
+            chargedNodes.append(int(line)-1)
+    
+    return chargedNodes
+
+
+# In[ ]:
+
+def runAndPrintExperiments(epsilon = 0.2, Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp"],
+                           readChargedNodes = False, pathPrefix = "../../input/", graphSuffix = "_complete.graph",
+                           chargeSuffix = "_charges.resid"):
     scores = []
+    initialTime = time.time()
     
     for Gname in Gnames:
-        G = readGraph(pathPrefix + Gname + ".graph", Format.METIS)
-
-        chargedNodes = set()
-        for v in range(numberOfChargedNodes):
-            chargedNodes.add(G.randomNode())
-            
-        print("Graph:", Gname)
+        G = readGraph(pathPrefix + Gname + graphSuffix, Format.METIS)
+        chargedNodes = []#readCharges(pathPrefix + Gname + chargeSuffix)
+        n = G.numberOfNodes()
+        graphScores = []
+        
+        if n > 100:
+            kList = [8,12,16,20,24]
+        else:
+            kList = [2,4,6,8]
+        
+        print("Graph:", Gname, "with", n, " nodes.")
         print("chargedNodes =", chargedNodes)
-        qualities = comparePartitionQuality(G, 10, 0.1, chargedNodes)
-        scores.append(qualities)
-        print('------------------------------------------------------------------')
+        for k in kList:
+            if len(chargedNodes) > k:
+                continue
+            print("k = ", k)
+            qualities = comparePartitionQuality(G, k, epsilon, chargedNodes, False)
+            scores.append(qualities)
+            graphScores.append(qualities)
+            print('------------------------------------------------------------------')
+        graphResults = {}
+        for score in graphScores:
+            for key in score:
+                if not key in graphResults:
+                    graphResults[key] = []
+                graphResults[key].append(score[key])
+                
+        gMeans = {}
+        for method in graphResults:
+            gMeans[method] = functools.reduce(operator.mul, graphResults[method], 1) ** (1/len(graphResults[method]))
+            print(method, ':', str(gMeans[method]))
+        print("Ratio:", gMeans['bestOfFour'] / gMeans['naive'])
+        print('##################################################################')
     
     results = {}
     for score in scores:
@@ -580,18 +745,141 @@ def main(numberOfChargedNodes = 5):
                 results[key] = []
             results[key].append(score[key])
             
+    print("Elapsed Time:", time.time() - initialTime)
+            
+    print("Geometric Means:")
+    for method in results:
+        print(method, ':', str(functools.reduce(operator.mul, results[method], 1) ** (1/len(results[method]))))
+        
+    print("Arithmetic Means:")
     for method in results:
         print(method, ':', str(sum(results[method]) / len(results[method])))
 
 
-# In[21]:
+# In[ ]:
 
-if __name__ == "__main__":
-    # execute only if run as a script
-    main(0)
+def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2]):
+    pathPrefix = "../../input/"
+    graphSuffix = "_complete.graph"
+    chargeSuffix = "_charges.resid"
+    algoList = ['ml', 'greedy', 'ka', 'naive', 'cont']
+    Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp", "fmo"]
+    #kList = [2**i for i in range(1,6)]
+    maxIterations = 100
+    
+    for Gname in Gnames:
+        G = readGraph(pathPrefix + Gname + graphSuffix, Format.METIS)
+        potentiallyCharged = readCharges(pathPrefix + Gname + chargeSuffix)
+        
+        n = G.numberOfNodes()
+        kList = []
+        if n > 100:
+            kList = [8,12,16,20,24]
+        else:
+            kList = [2,4,6,8]
+        
+        for run in range(runs):
+            with open(Gname+'-results-'+str(run)+'.dat', 'w') as f:
+                f.write('\t'.join(['k']+[str(e) for e in epsilonList]+['label\n']))
+
+                for k in kList:
+                    chargedNodes = []
+                    if charges:
+                        valid = False
+                        i = 0
+
+                        while not valid and i < maxIterations:
+                            chargedNodes = random.sample(potentiallyCharged, int(k*0.8))
+                            isCharged = [v in chargedNodes for v in G.nodes()]
+                            valid = chargesValid(G, [k], min(epsilonList), isCharged)
+                            i += 1
+                        if not valid:
+                            print("No valid charges found after "+str(i)+" iterations.")
+                            continue
+
+                        print(chargedNodes)
+
+                    # data format: one line per algorithm and k
+                    lineDict = {}
+                    for algo in algoList:
+                        lineDict[algo] = [str(k)]
+
+                    for epsilon in epsilonList:
+                        qualities = comparePartitionQuality(G, k, epsilon, chargedNodes, True)
+                        for algo in algoList:
+                            if algo in qualities:
+                                lineDict[algo].append(str(qualities[algo]/qualities['naive']))
+                            else:
+                                lineDict[algo].append('NA')
+                        print('Experiments done for k=', k, ', epsilon=', epsilon)
+
+                    for i in range(len(algoList)):
+                        algo = algoList[i]
+                        lineDict[algo].append(str(i))
+                        f.write('\t'.join(lineDict[algo])+'\n')
 
 
 # In[ ]:
 
+def averageLogs(runs, Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp"]):
+    for Gname in Gnames:
 
+        sumEntries = []
+        numEntries = []
+
+        for run in range(runs):
+            filename = Gname+'-results-'+str(run)+'.dat'
+            with open(filename, 'r') as f:
+                f.readline()# remove header data
+                lineNumber = 0
+                for line in f:
+                    lineList = line.split('\t')
+
+                    if len(sumEntries) < lineNumber+1:
+                        sumEntries.append([0 for field in lineList])
+                        numEntries.append([0 for field in lineList])
+
+                    for i in range(len(sumEntries[lineNumber]), len(lineList)):
+                        sumEntries[lineNumber].append(0)
+                        numEntries[lineNumber].append(0)
+
+                    for i in range(len(lineList)):
+                        sumEntries[lineNumber][i] +=  float(lineList[i])
+                        numEntries[lineNumber][i] += 1
+
+                    lineNumber += 1
+        assert(len(sumEntries) == len(numEntries))
+
+        outputname = Gname+'-results-averaged.dat'
+        with open(outputname, 'w') as f:
+            for rowIndex in range(len(sumEntries)):
+                assert(len(sumEntries[rowIndex]) == len(numEntries[rowIndex]))
+                linelist = [str(sumEntries[rowIndex][colIndex] / numEntries[rowIndex][colIndex]) for colIndex in range(len(sumEntries[rowIndex])) ]
+                f.write('\t'.join(linelist)+'\n')
+
+
+# In[ ]:
+
+def writePartition(part, path):
+    community.PartitionWriter().write(part, path)
+
+
+def runAndSavePartitions(Gname, k = 8, epsilon = 0.2, pathPrefix = "../../input/"):
+    G = readGraph(pathPrefix + Gname + ".graph", Format.METIS)
+
+    ml = mlPartition(G, k, epsilon)
+    ka = kaHiPWrapper(G, k, epsilon)
+    ml = repairPartition(G, ml, epsilon)
+    ka = repairPartition(G, ka, epsilon)
+    cont = dpPartition(G, k, epsilon)
+    naive = naivePartition(G, k)
+    ml.compact()
+    ka.compact()
+    cont.compact()
+
+    # write partitions
+    community.PartitionWriter().write(ml, 'MultiLevel-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+    community.PartitionWriter().write(ka, 'KaHiP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+    community.PartitionWriter().write(cont, 'DP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+    community.PartitionWriter().write(naive, 'Naive-k-'+str(k)+'-'+Gname+'.part')
 
