@@ -1,11 +1,19 @@
-
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from __future__ import absolute_import
+from builtins import open
+from builtins import range
+from builtins import str
+from builtins import int
+from future import standard_library
+standard_library.install_aliases()
 # coding: utf-8
 
 # In[ ]:
 
-# %load chempartlib.py
 from networkit import *
-import math, sys, subprocess, functools, operator, time, random
+import math, sys, subprocess, functools, operator, time, random, os
 
 
 # In[ ]:
@@ -22,7 +30,7 @@ def getCutWeight(G, part, v, block):
 
 # In[ ]:
 
-def dpPartition(G, k, imbalance, isCharged=[]):
+def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
     """
     Partition G into subsets of size at most math.ceil(n/k)*(1+imbalance) and with consecutive node ids.
     Charged nodes are not grouped into the same subset.
@@ -39,6 +47,7 @@ def dpPartition(G, k, imbalance, isCharged=[]):
     assert(k <= n)
     assert(imbalance >= 0)
     maxBlockSize = int(math.ceil(n / k)*(1+imbalance))
+    minBlockSize = max(math.ceil(math.floor(n / k)*(1-imbalance)), 1) if useLowerBounds else 1
     
     # allocate cut and predecessor table
     table = [[float("inf") for j in range(k)] for i in range(n)]
@@ -62,7 +71,7 @@ def dpPartition(G, k, imbalance, isCharged=[]):
             elif neighbor < i:
                 weightSum -= G.weight(i,neighbor)
                 
-        table[i][0] = weightSum
+        table[i][0] = weightSum if i >= minBlockSize else float("inf")
         
     # fill remaining values 
     for i in range(n):      
@@ -91,7 +100,7 @@ def dpPartition(G, k, imbalance, isCharged=[]):
         
         # calculate optimal next fragment
         for j in range(1,k):
-            predList = [table[l][j-1] + costArray[i-l-1] for l in range(windowStart, i)]
+            predList = [table[l][j-1] + costArray[i-l-1] for l in range(windowStart, i-minBlockSize+1)]
             if (len(predList) > 0):
                 minPred = min(predList)
                 table[i][j] = minPred
@@ -857,29 +866,94 @@ def averageLogs(runs, Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp"]):
                 linelist = [str(sumEntries[rowIndex][colIndex] / numEntries[rowIndex][colIndex]) for colIndex in range(len(sumEntries[rowIndex])) ]
                 f.write('\t'.join(linelist)+'\n')
 
-
-# In[ ]:
-
 def writePartition(part, path):
     community.PartitionWriter().write(part, path)
 
 
-def runAndSavePartitions(Gname, k = 8, epsilon = 0.2, pathPrefix = "../../input/"):
-    G = readGraph(pathPrefix + Gname + ".graph", Format.METIS)
+def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = []):
+    n = G.numberOfNodes()
+    if len(isCharged) == 0:
+        isCharged = [False for v in range(G.numberOfNodes())]
+    
+    sizelimit = int(math.ceil(n / k)*(1+epsilon))
 
-    ml = mlPartition(G, k, epsilon)
-    ka = kaHiPWrapper(G, k, epsilon)
-    ml = repairPartition(G, ml, epsilon)
-    ka = repairPartition(G, ka, epsilon)
-    cont = dpPartition(G, k, epsilon)
-    naive = naivePartition(G, k)
+    ml = mlPartition(G, k, epsilon, isCharged)
+    ml = repairPartition(G, ml, epsilon, isCharged)
     ml.compact()
-    ka.compact()
-    cont.compact()
+    result = ml
+    resultWeight = partitioning.computeEdgeCut(result, G)
+    writePartition(ml, 'MultiLevel-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+    print("Wrote Multilevel partition with", ml.numberOfSubsets(), " fragments and weight", resultWeight)
 
-    # write partitions
-    community.PartitionWriter().write(ml, 'MultiLevel-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
-    community.PartitionWriter().write(ka, 'KaHiP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
-    community.PartitionWriter().write(cont, 'DP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
-    community.PartitionWriter().write(naive, 'Naive-k-'+str(k)+'-'+Gname+'.part')
+    greedy = greedyPartition(G, k, epsilon, isCharged)
+    cutWeight = partitioning.computeEdgeCut(greedy, G)
+    if cutWeight < resultWeight:
+        result = greedy
+        resultWeight = cutWeight
+    writePartition(greedy, 'Greedy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+    print("Wrote Greedy partition with", greedy.numberOfSubsets(), " fragments and weight", cutWeight)
+
+    try:
+        ka = kaHiPWrapper(G, k, epsilon)
+        ka = repairPartition(G, ka, epsilon, isCharged)
+        ka.compact()
+        cutWeight = partitioning.computeEdgeCut(ka, G)
+        if cutWeight < resultWeight:
+            result = ka
+            resultWeight = cutWeight
+        writePartition(ka, 'KaHiP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+        print("Wrote KaHiP partition with", ka.numberOfSubsets(), " fragments and weight", cutWeight)
+    except FileNotFoundError as e:
+        pass
+
+    try:
+        cont = dpPartition(G, k, epsilon, isCharged)
+        cutWeight = partitioning.computeEdgeCut(cont, G)
+        if cutWeight < resultWeight:
+            result = cont
+            resultWeight = cutWeight
+        writePartition(cont, 'DP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+        print("Wrote DP partition with", cont.numberOfSubsets(), " fragments and weight", cutWeight)
+    except ValueError as e:
+        pass
+
+    try:
+        contLegacy = dpPartition(G, k, epsilon, isCharged, True)
+        cutWeight = partitioning.computeEdgeCut(contLegacy, G)
+        writePartition(contLegacy, 'DP-legacy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+        print("Wrote legacy DP partition with", contLegacy.numberOfSubsets(), " fragments and weight", cutWeight)
+    except ValueError as e:
+        pass
+    
+    
+    naive = naivePartition(G, k)
+    naive = repairPartition(G, naive, 0, isCharged)
+    cutWeight = partitioning.computeEdgeCut(naive, G)
+    writePartition(naive, 'Naive-k-'+str(k)+'-'+Gname+'.part')
+    print("Wrote naive partition with", naive.numberOfSubsets(), " fragments and weight", cutWeight)
+
+    cutWeight = partitioning.computeEdgeCut(result, G)
+    writePartition(result, 'Best-k-'+str(k)+'-'+Gname+'.part')
+    print("Wrote selected partition with", result.numberOfSubsets(), " fragments and weight", cutWeight)
+    
+
+if __name__ == '__main__':
+    filename = sys.argv[1]
+    k = int(sys.argv[2])
+    epsilon = float(sys.argv[3])
+    chargedNodes = []
+    for i in range(4, len(sys.argv)):
+        chargedNodes.append(int(sys.argv[i]))
+    
+    G = readGraph(filename, Format.METIS)
+    n = G.numberOfNodes()
+    isCharged = [False for i in range(n)]
+    for c in chargedNodes:
+        assert(c < n)
+        isCharged[c] = True
+
+    Gname = os.path.basename(filename)
+
+    runAndSavePartitions(G, Gname, k, epsilon, isCharged)
+
 
