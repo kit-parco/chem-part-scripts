@@ -22,12 +22,47 @@ class TestChempartlib(unittest.TestCase):
 			sizes = part1.subsetSizes()
 			self.assertTrue(max(sizes) <= math.ceil(n/k)*(1+epsilon))
 			self.assertEqual(len(sizes), k)
+			self.assertEqual(part1.numberOfSubsets(), k)
+			self.assertTrue(partitioning.computeImbalance(part1, G) <= 1+epsilon)# if this fails after the previous size check worked, your version of networkit is probably outdated
+
+			naive = chempartlib.naivePartition(G, k)
+			if naive.numberOfSubsets() == k:
+				self.assertTrue(partitioning.computeEdgeCut(part1, G) <= partitioning.computeEdgeCut(naive, G))
 
 			part2 = chempartlib.dpPartition(G, k, epsilon, [], True)
 			sizes = part2.subsetSizes()
 			self.assertTrue(max(sizes) <= math.ceil(n/k)*(1+epsilon))
 			self.assertEqual(len(sizes), k)
 			self.assertTrue(min(sizes) >= math.floor(n / k)*(1-epsilon))
+			self.assertTrue(partitioning.computeImbalance(part2, G) <= 1+epsilon)
+
+			naiveSizes = naive.subsetSizes()
+			if len(naiveSizes) == k and min(naiveSizes) >= math.floor(n / k)*(1-epsilon):
+				self.assertTrue(partitioning.computeEdgeCut(part2, G) <= partitioning.computeEdgeCut(naive, G))
+
+			self.assertTrue(partitioning.computeEdgeCut(part1, G) <= partitioning.computeEdgeCut(part2, G))
+
+	def test_dpPartitionCharged(self):
+		runs = 100
+		for run in range(runs):
+			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
+			n = G.numberOfNodes()
+			k = random.randint(2,int(n/2))
+			epsilon = random.random()
+
+			chargedNodes = random.sample(G.nodes(), int(k*0.8))
+			isCharged = [v in chargedNodes for v in G.nodes()]
+
+			try:
+				part = chempartlib.dpPartition(G, k, epsilon, isCharged)
+				for a in chargedNodes:
+					for b in chargedNodes:
+						if part[a] == part[b]:
+							self.assertEqual(a,b)
+			except ValueError as e:
+				pass
+
+
 
 	def test_dpPartitionInputCheck(self):
 		G = generators.ErdosRenyiGenerator(100, 0.1, False).generate()
