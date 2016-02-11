@@ -21,8 +21,8 @@ import math, sys, subprocess, functools, operator, time, random, os
 def getCutWeight(G, part, v, block):
     n = G.numberOfNodes()
     z = G.upperNodeIdBound()
+    assert(G.hasNode(v))
     assert(len(part) == n)
-    assert(v < n)
     assert(block in part)
     
     return sum([G.weight(v, u) for u in G.nodes() if G.hasEdge(v,u) and part[u] == block])
@@ -43,7 +43,7 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
         assert(sum(isCharged) <= k)
     else:
         isCharged = [False for i in range(n)]
-    assert(k > 0)
+    assert(k > 1)
     assert(k <= n)
     assert(imbalance >= 0)
     maxBlockSize = int(math.ceil(n / k)*(1+imbalance))
@@ -56,7 +56,7 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
     # fill values for the first fragment
     chargeEncountered = False
     weightSum = 0
-    for i in range(maxBlockSize):    
+    for i in range(min(maxBlockSize, n)):    
         # a fragment may only contain one charge, stop when a second one is encountered
         if isCharged[i]:
             if chargeEncountered:
@@ -71,7 +71,7 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
             elif neighbor < i:
                 weightSum -= G.weight(i,neighbor)
                 
-        table[i][0] = weightSum if i >= minBlockSize else float("inf")
+        table[i][0] = weightSum if i >= minBlockSize -1 else float("inf")
         
     # fill remaining values 
     for i in range(n):      
@@ -110,7 +110,7 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
     bestCutValue = table[n-1][k-1]
         
     if (bestCutValue == float("inf")):
-        raise ValueError("Combination of parameters allows no partition!")
+        raise ValueError("Combination n="+str(n)+", k="+str(k)+", epsilon="+str(imbalance)+" and chargedNodes="+str([i for i in G.nodes() if isCharged[i]])+" allows no partition!")
     result = partitioning.Partition(n)
     result.setUpperBound(k)
     
