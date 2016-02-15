@@ -213,7 +213,7 @@ def greedyPartition(G, k, imbalance, isCharged=[]):
 
 # In[ ]:
 
-def mlPartition(G, k, imbalance, isCharged=[]):
+def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidGaps = False):
     """
     Use a multi-level approach with Fiduccia-Matheyses to partition G.
 
@@ -239,7 +239,7 @@ def mlPartition(G, k, imbalance, isCharged=[]):
         initial = greedy
     # Problem: The single node repair in C++ may create invalid partitions.
     # Better to not use it and repair in Python.
-    mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, False, listOfChargedNodes, False, initial)
+    mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, avoidGaps, initial)
     mlp.run()
     return mlp.getPartition()
 
@@ -925,7 +925,6 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = []):
     except ValueError as e:
         pass
     
-    
     naive = naivePartition(G, k)
     naive = repairPartition(G, naive, 0, isCharged)
     cutWeight = partitioning.computeEdgeCut(naive, G)
@@ -955,5 +954,3 @@ if __name__ == '__main__':
     Gname = os.path.basename(filename)
 
     runAndSavePartitions(G, Gname, k, epsilon, isCharged)
-
-
