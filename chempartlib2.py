@@ -187,7 +187,7 @@ def greedyPartition(G, k, imbalance, isCharged=[]):
     sortedEdges = sorted(G.edges(), key=getWeight)
     
     # merge heaviest edge, as long as allowed
-    while len(sortedEdges) > 0:
+    while len(sortedEdges) > 0 and remainingFragments > k:
         allowed = True
         heaviestEdge = sortedEdges.pop()
         firstPart = part.subsetOf(heaviestEdge[0])
