@@ -117,5 +117,13 @@ class TestChempartlib(unittest.TestCase):
 			self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged))
 			self.assertEqual(part.numberOfSubsets(), k)
 
+	def test_repairPartition(self):
+		runs = 100
+		for run in range(runs):
+			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
+			n = G.numberOfNodes()
+			k = random.randint(2,int(n/2))
+			epsilon = random.random()
+
 if __name__ == '__main__':
     unittest.main()

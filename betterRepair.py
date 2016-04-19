@@ -4,10 +4,10 @@ import math
 def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 	n = G.numberOfNodes()
 
+	partition.compact()
 	fragmentSet = set(partition)
 	k = len(fragmentSet)
 
-	#TODO: what happens if the partition contains large fragment IDs?
 	fragmentSizes = [0 for f in fragmentSet]
 	fragmentCharges = [[] for f in fragmentSet]
 	edgeCuts = [[0 for f in fragmentSet] for v in G.nodes()]
@@ -28,7 +28,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 	if max(fragmentSizes) <= maxBlockSize and max([len(group) for group in fragmentCharges]) <= 1 and not gapsFound:
 		return partition
 
-	maxGain = [- math.inf for v in G.nodes()]
+	maxGain = [- float('inf') for v in G.nodes()]
 	maxTarget = [-1 for v in G.nodes()]
 	heap = []
 
@@ -40,9 +40,9 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 			allowed = False
 		if fragmentSizes[target] == maxBlockSize and partition[v] != target:
 			allowed = False
-		if G.hasNode(v+2) and part[v+2] == target and part[v+1] != target:
+		if G.hasNode(v+2) and partition[v+2] == target and partition[v+1] != target:
 			allowed = False
-		if v > 0 and G.hasNode(v-1) and G.hasNode(v+1) and part[v-1] == part[v+1] and target != part[v-1]:
+		if v > 0 and G.hasNode(v-1) and G.hasNode(v+1) and partition[v-1] == partition[v+1] and target != partition[v-1]:
 			allowed = False
 		return allowed
 
@@ -55,25 +55,38 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 				maxGain[v] = edgeCuts[v][target] - edgeCuts[v][partition[v]]
 				maxTarget[v] = target
 
-	heap.heappush((maxGain[v], v))
+		heappush(heap, (maxGain[v], v))
 
 	visited = [False for v in range(n)]
+	assert(len(heap) == n)
+	i = 0
 
 	while len(heap) > 0:
-		(key, v) = heappop()
+		assert(len(heap) +  i == n)
+		(key, v) = heappop(heap)
+		i += 1
 		fragment = partition[v]
-
 		visited[v] = True
 
 		def gapAt(v):
-			return v > 0 and G.hasNode(v) and G.hasNode(v+2) and partition[v] == partition[v+2] and partition[v] != partition[v+1]
+			return v >= 0 and G.hasNode(v) and G.hasNode(v+2) and partition[v] == partition[v+2] and partition[v] != partition[v+1]
 
 		# if fragment of v is alright, skip node
 		if fragmentSizes[fragment] <= maxBlockSize and (not isCharged[v] or len(fragmentCharges[fragment]) <= 1) and not gapAt(v-2) and not gapAt(v-1) and not gapAt(v):
 			continue
 
-		if key == - math.inf:
-			raise ValueError("Partition could not be repaired.")
+		if key == -float('inf'):
+			# new partition necessary
+			if partition.upperBound() <= max(fragmentSet)+1:
+				partition.setUpperBound(max(fragmentSet)+2)
+				fragmentSizes.append(0)
+				fragmentCharges.append([])
+				for u in G.nodes():
+					edgeCuts[u].append(0)
+			maxTarget[v] = max(fragmentSet)+1		
+
+		assert(maxTarget[v] >= 0)
+		assert(maxTarget[v] < partition.upperBound())
 
 		# otherwise, move v to best allowed fragment and update data structures
 		fragmentSizes[partition[v]] -= 1
@@ -102,7 +115,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 
 			if maxGain[neighbor] != oldKey:
 				heap.remove((oldKey, neighbor))
-				heap.heapify()
-				heap.heappush((maxGain[neighbor], neighbor))
-				
+				heapify(heap)
+				heappush(heap, (maxGain[neighbor], neighbor))
+
 	return partition

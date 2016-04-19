@@ -13,6 +13,7 @@ standard_library.install_aliases()
 # In[ ]:
 
 from networkit import *
+from betterRepair import repairPartition
 import math, sys, subprocess, functools, operator, time, random, os
 
 
@@ -34,6 +35,8 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
     """
     Partition G into subsets of size at most math.ceil(n/k)*(1+imbalance) and with consecutive node ids.
     Charged nodes are not grouped into the same subset.
+	If a partition with these parameters is impossible, a ValueError is raised.
+	If useLowerBounds is true, returned subsets have sizes of at least math.ceil(math.floor(n / k)*(1-imbalance))
     """
 
     # validate input
@@ -166,7 +169,9 @@ def naivePartition(G, k):
 
 def greedyPartition(G, k, imbalance, isCharged=[]):
     """
-    Starting with singleton clusters, greedily merge the heaviest edge as long as it is smaller than sizelimit.
+    Starting with singleton clusters, greedily merge the heaviest edge as long as the resulting cluster has size at most math.ceil(n/k)*(1+imbalance) and the charge and gap constraints are fulfilled.
+
+	May return a partition with more than k clusters.
     """
     n = G.numberOfNodes()
     if len(isCharged) > 0:
@@ -241,7 +246,7 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidG
     # Better to not use it and repair in Python.
     mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, avoidGaps, initial)
     mlp.run()
-    return mlp.getPartition()
+    return repairPartition(G, mlp.getPartition(), imbalance, isCharged)
 
 
 # In[ ]:
@@ -406,122 +411,14 @@ def exportToGephi(G, xcoords, ycoords, part):
     client.exportNodeValues(G, [-elem for elem in ycoords], 'y')
     client.exportEdgeValues(G, [G.weight(u,v) for u,v in G.edges()], 'Weight')
 
-
-# In[ ]:
-
-def moveAllowed(G, partition, v, targetBlock, maxBlockSize = 0, isCharged = []):
-    """
-    Returns False/True, depending on whether it is allowed to move node v to block targetBlock without violating the charge and gap constraints
-    """
-    
-    z = G.upperNodeIdBound()
-    n = G.numberOfNodes()
-    assert(n <= z)
-    assert(len(partition) == z)
-    assert(G.hasNode(v))
-    assert(len(isCharged) == 0 or len(isCharged) == z)
-    
-    if maxBlockSize == 0:
-        maxBlockSize = n
-        
-    targetBlockSize = sum([partition[u] == targetBlock for u in G.nodes()])
-    
-    if len(isCharged) == 0:
-        isCharged = [False for i in range(z)]
-    
-    # move would be forbidden if node and target partition are already charged
-    if isCharged[v] and any([isCharged[u] for u in G.nodes() if partition[u] == targetBlock and u != v]):
-        return False
-    
-    # move would also be forbidden if gap in main chain of size 1 is created
-    if v-2 >= 0 and G.hasNode(v-2) and partition[v-2] == targetBlock and G.hasNode(v-1) and partition[v-1] != targetBlock:
-        return False
-    
-    if G.hasNode(v+2) and partition[v+2] == targetBlock and G.hasNode(v+1) and partition[v+1] != targetBlock:
-        return False
-    
-    # move is forbidden if targetBlock is already at maximum capacity
-    if targetBlockSize > maxBlockSize or (targetBlockSize == maxBlockSize and partition[v] != targetBlock):
-        return False
-    
-    # move is allowed!
-    return True
-    
-
-
-# In[ ]:
-
-def getCutWeights(G, part, v):
-    """
-    Returns a dictionary with block numbers as keys and cut weights as values
-    """
-    n = G.numberOfNodes()
-    assert(len(part) == n)
-    assert(v < n)
-    
-    sums = {}
-    
-    for block in set(part):
-        sums[block] = 0
-        
-    for u in G.neighbors(v):
-        sums[part[v]] += G.weight(u,v)
-        
-    return sums
-
-
-# In[ ]:
-
-def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
-    """
-    Repairs errors in partition, for example multiple charged nodes in the same partition or gaps of size 1.
-    TODO: As of now, this method contains bugs and does not guarantee a valid partition after a run.
-    """
-    z = G.upperNodeIdBound()
-    n = G.numberOfNodes()
-    assert(len(partition) == z)
-    assert(len(isCharged) == 0 or len(isCharged) == z)
-    if len(isCharged) == 0:
-        isCharged = [False for i in range(z)]
-        
-    k = len(set(partition))
-        
-    maxBlockSize = int(math.ceil(n / k)*(1+imbalance))
-
-    
-    fragmentSet = {partition[v] for v in range(len(partition))}
-    
-    def findBestMove(u):
-        allowedMoves = [f for f in fragmentSet if moveAllowed(G, partition, u, f, maxBlockSize, isCharged)]
-        weights = getCutWeights(G, partition, u)
-        if len(allowedMoves) == 0:
-            print("No allowed target partition found for node", u, ", creating new partition.")
-            newFragmentID= max(fragmentSet)+1
-            fragmentSet.add(newFragmentID)
-            return newFragmentID
-
-        assert(len(allowedMoves) > 0)
-        bestMove = allowedMoves[0]
-        for move in allowedMoves:
-            if weights[move] > weights[bestMove]:
-                #we want to minimize the total weight of cut edges.
-                #Thus we select as target partition the one with the highest edge weight to the current node
-                bestMove = move
-        return bestMove
-    
-    for u in G.nodes():
-        #can the node stay where it is?
-        if not moveAllowed(G, partition, u, partition[u], maxBlockSize, isCharged):
-            # if not, find the best move for it
-            partition[u] = findBestMove(u)
-    return partition
-
-
 # In[ ]:
 
 def partitionValid(G, partition, maxBlockSize = 0, isCharged = []):
-    z = G.upperNodeIdBound()
+    """
+    Returns True if the given partition fulfills the size, charge and gap constraint, False otherwise.
+    """
     n = G.numberOfNodes()
+    z = G.upperNodeIdBound()
     if len(partition) != z:
         return False
     
