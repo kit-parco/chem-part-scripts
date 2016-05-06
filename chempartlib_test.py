@@ -124,8 +124,11 @@ class TestChempartlib(unittest.TestCase):
 			n = G.numberOfNodes()
 			k = random.randint(2,int(n/2))
 			epsilon = random.random()
-			naive = chempartlib.naivePartition(G, k)
-			repaired = chempartlib.repairPartition(G, naive, epsilon)
+			badPartition = partitioning.Partition(n)
+			badPartition.setUpperBound(k)
+			for i in range(n):
+				badPartition.moveToSubset(random.randint(0,k-1), i)
+			repaired = chempartlib.repairPartition(G, badPartition, epsilon)
 			self.assertTrue(chempartlib.partitionValid(G, repaired, math.ceil(n/k)*(1+epsilon)))
 
 if __name__ == '__main__':

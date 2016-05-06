@@ -1,4 +1,4 @@
-#python 2/3 compatibility imports
+#python 2/3 compatibility imports. Not really necessary, since Networkit needs python3 anyway.
 from __future__ import division
 from __future__ import print_function
 from __future__ import unicode_literals
