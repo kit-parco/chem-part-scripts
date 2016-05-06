@@ -3,6 +3,9 @@ import math
 
 def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 	n = G.numberOfNodes()
+	z = G.upperNodeIdBound()
+	if len(isCharged) > 0 and len(isCharged) != z:
+		raise ValueError("If charges are given, charge array must have the same size as graph")
 
 	partition.compact()
 	fragmentSet = set(partition)
@@ -16,7 +19,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 
 	for v in G.nodes():
 		fragmentSizes[partition[v]] += 1
-		if isCharged[v]:
+		if len(isCharged) > 0 and isCharged[v]:
 			fragmentCharges[partition[v]].append(v)
 		if G.hasNode(v+2) and partition[v+2] == partition[v] and G.hasNode(v+1) and partition[v+1] != partition[v]:
 			gapsFound = True
@@ -34,7 +37,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 
 	def allowed(v, target):
 		allowed = True
-		if isCharged[v] and ((len(fragmentCharges[target]) > 0 and v not in fragmentCharges[target]) or len(fragmentCharges[target]) > 1):
+		if len(isCharged) > 0 and isCharged[v] and ((len(fragmentCharges[target]) > 0 and v not in fragmentCharges[target]) or len(fragmentCharges[target]) > 1):
 			allowed = False
 		if fragmentSizes[target] > maxBlockSize:
 			allowed = False
@@ -72,7 +75,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 			return v >= 0 and G.hasNode(v) and G.hasNode(v+2) and partition[v] == partition[v+2] and partition[v] != partition[v+1]
 
 		# if fragment of v is alright, skip node
-		if fragmentSizes[fragment] <= maxBlockSize and (not isCharged[v] or len(fragmentCharges[fragment]) <= 1) and not gapAt(v-2) and not gapAt(v-1) and not gapAt(v):
+		if fragmentSizes[fragment] <= maxBlockSize and (len(isCharged) == 0 or not isCharged[v] or len(fragmentCharges[fragment]) <= 1) and not gapAt(v-2) and not gapAt(v-1) and not gapAt(v):
 			continue
 
 		if key == -float('inf'):
@@ -92,7 +95,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 		fragmentSizes[partition[v]] -= 1
 		fragmentSizes[maxTarget[v]] += 1
 
-		if isCharged[v]:
+		if len(isCharged) > 0 and isCharged[v]:
 			fragmentCharges[partition[v]].remove(v)
 			fragmentCharges[maxTarget[v]].append(v)
 	
