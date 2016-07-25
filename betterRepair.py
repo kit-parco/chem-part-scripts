@@ -41,7 +41,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 
 	def chargeAllowed(v, target):
 		numCharged = len(fragmentCharges[target])
-		return len(isCharged) == 0 or not isCharged[v] or numCharged == 0 or numCharged == 1 or fragmentCharges[target] == {v}
+		return len(isCharged) == 0 or not isCharged[v] or numCharged == 0 or fragmentCharges[target] == [v]
 
 	def allowed(v, target):
 		return chargeAllowed(v, target) and sizeAllowed(v, target) and not gapAt(v, target)
@@ -100,7 +100,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 				edgeCuts[neighbor][fragment] -= G.weight(neighbor, bestMovementCandidate)
 				edgeCuts[neighbor][bestTargetFragment] += G.weight(neighbor, bestMovementCandidate)
 
-			partition[v] = bestTargetFragment
+			partition[bestMovementCandidate] = bestTargetFragment
 
 	#then handle gaps
 	for v in G.nodes():
@@ -108,6 +108,11 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 			#we have a gap here. If possible, switch move v to surrounding block, not considering size constraints
 			if len(isCharged) == 0 or not isCharged[v] or len(fragmentCharges[partition[v+1]]) == 0:
 				#move to surrounding block.
+				if len(isCharged) > 0 and isCharged[v]:
+					assert(v in fragmentCharges[partition[v]])
+					fragmentCharges[partition[v]].remove(v)
+					fragmentCharges[partition[v+1]].append(v)
+
 				partition[v] = partition[v+1]
 				
 			else:
@@ -116,12 +121,17 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 				if not isCharged[v+1]:
 					partition[v+1] = partition[v]
 				else:
-					#switch blocks of with right neighbor
+					#switch blocks with right neighbor
+					fragmentCharges[partition[v]].remove(v)
+					fragmentCharges[partition[v+1]].append(v)
+					fragmentCharges[partition[v+1]].remove(v+1)
+					fragmentCharges[partition[v]].append(v+1)
+
 					ownFragment = partition[v]
 					partition[v] = partition[v+1]
 					partition[v+1] = ownFragment
 
-	#rebuild indices of fragment sizes and charges
+	#rebuild indices of fragment sizes
 	fragmentSizes = [0 for f in fragmentSet]
 	fragmentCharges = [[] for f in fragmentSet]
 	edgeCuts = [[0 for f in fragmentSet] for v in G.nodes()]
