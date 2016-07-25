@@ -232,4 +232,5 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 
 	assert(max(fragmentSizes) <= maxBlockSize)
 	assert(max([len(chargeList) for chargeList in fragmentCharges]) <= 1)
+	assert(len(set(partition)) == k)
 	return partition
