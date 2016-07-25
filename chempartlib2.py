@@ -52,6 +52,9 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
     assert(imbalance >= 0)
     maxBlockSize = int(math.ceil(n / k)*(1+imbalance))
     minBlockSize = max(math.ceil(math.floor(n / k)*(1-imbalance)), 1) if useLowerBounds else 1
+
+    if sum(isCharged) > k:
+        raise ValueError("Each fragment can contain at most one charged node, thus having more charged nodes than fragments is impossible.")
     
     # allocate cut and predecessor table
     table = [[float("inf") for j in range(k)] for i in range(n)]
@@ -158,6 +161,8 @@ def naivePartition(G, k):
     Chop a new fragment off G every n/k nodes
     """
     n = G.numberOfNodes()
+    if k > n:
+        raise ValueError("Cannot have more partitions than nodes.")
     naivePart = partitioning.Partition(n)
     naivePart.allToSingletons()
     for i in range(n):
@@ -179,6 +184,8 @@ def greedyPartition(G, k, imbalance, isCharged=[]):
         assert(len(isCharged)==n)
     else:
         isCharged = [False for i in range(n)]
+    if sum(isCharged) > k:
+        raise ValueError("Each fragment can contain at most one charged node, thus having more charged nodes than fragments is impossible.")
     n = G.numberOfNodes()
     part = partitioning.Partition(n)
     part.allToSingletons()
@@ -260,7 +267,7 @@ def kaHiPWrapper(G, k, imbalance = 0.2, pathToKaHiP = '/home/moritzl/Gadgets/KaH
     tempFileName = 'tempForKaHiP.graph'
     outputFileName = 'tmppartition'+str(k)
     n = G.numberOfNodes()
-    
+
     maxWeight = max([G.weight(u,v) for (u,v) in G.edges()])
     
     """
@@ -307,6 +314,9 @@ def getBestCut(G, k, imbalance, isCharged = []):
     if len(isCharged) == 0:
         isCharged = [False for v in range(G.numberOfNodes())]
     sizelimit = int(math.ceil(n / k)*(1+imbalance))
+
+    if sum(isCharged) > k:
+        raise ValueError("Each fragment can contain at most one charged node, thus having more charged nodes than fragments is impossible.")
     
     ml = mlPartition(G, k, imbalance, isCharged)
     if not partitionValid(G, ml, sizelimit, isCharged):
