@@ -72,15 +72,17 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 	if max(fragmentSizes) <= maxBlockSize and max([len(group) for group in fragmentCharges]) <= 1 and not gapsFound:
 		return partition
 
+	del(fragmentSizes)
+
 	#first handle charged nodes
 	for fragment in fragmentSet:
 		while len(fragmentCharges[fragment]) > 1:
-			# charged node must be moved. We don't care about the size constraints here, these can be handled later.
+			# charged node must be moved. We don't care about the size or gap constraints here, these can be handled later.
 			bestMovementCandidate = fragmentCharges[fragment][0]
 			bestTargetFragment = -1
 			bestGain = -float("inf")
 
-			for chargedNode in fragmentCharges:
+			for chargedNode in fragmentCharges[fragment]:
 				for target in fragmentSet:
 					gain = edgeCuts[chargedNode][target] - edgeCuts[chargedNode][fragment]
 					if chargeAllowed(chargedNode, target) and gain > bestGain:
@@ -90,44 +92,55 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 
 			if bestTargetFragment == -1:
 				raise ValueError("Input partition contains multiple charges per fragment and one of them cannot be moved.")
-			fragmentSizes[fragment] -= 1
-			fragmentSizes[bestTargetFragment] += 1
 	
-			fragmentCharges[fragment].remove(v)
-			fragmentCharges[bestTargetFragment].append(v)
+			fragmentCharges[fragment].remove(bestMovementCandidate)
+			fragmentCharges[bestTargetFragment].append(bestMovementCandidate)
 		
-			for neighbor in G.neighbors(v):
-				edgeCuts[neighbor][fragment] -= G.weight(neighbor, v)
-				edgeCuts[neighbor][bestTargetFragment] += G.weight(neighbor, v)
+			for neighbor in G.neighbors(bestMovementCandidate):
+				edgeCuts[neighbor][fragment] -= G.weight(neighbor, bestMovementCandidate)
+				edgeCuts[neighbor][bestTargetFragment] += G.weight(neighbor, bestMovementCandidate)
 
 			partition[v] = bestTargetFragment
 
 	#then handle gaps
 	for v in G.nodes():
 		if v > 0 and G.hasNode(v-1) and G.hasNode(v+1) and partition[v-1] == partition[v+1] and partition[v] != partition[v+1]:
-			#we have a gap here. If possible, move v to surrounding block, not considering size constraints
+			#we have a gap here. If possible, switch move v to surrounding block, not considering size constraints
 			if len(isCharged) == 0 or not isCharged[v] or len(fragmentCharges[partition[v+1]]) == 0:
 				#move to surrounding block.
-				fragmentSizes[partition[v]] -= 1
 				partition[v] = partition[v+1]
-				fragmentSizes[partition[v]] += 1
+				
 			else:
 				#one of the neighbours must be uncharged, since they belong to the same partition
 				assert(not isCharged[v-1] or not isCharged[v+1])
-				if not isCharged[v-1]:
-					fragmentSizes[partition[v-1]] -= 1
-					fragmentSizes[partition[v]] += 1
-					partition[v-1] = partition[v]
-				else:
-					fragmentSizes[partition[v+1]] -= 1
-					fragmentSizes[partition[v]] += 1
+				if not isCharged[v+1]:
 					partition[v+1] = partition[v]
+				else:
+					#switch blocks of with right neighbor
+					ownFragment = partition[v]
+					partition[v] = partition[v+1]
+					partition[v+1] = ownFragment
+
+	#rebuild indices of fragment sizes and charges
+	fragmentSizes = [0 for f in fragmentSet]
+	fragmentCharges = [[] for f in fragmentSet]
+	edgeCuts = [[0 for f in fragmentSet] for v in G.nodes()]
 
 	for v in G.nodes():
+		fragmentSizes[partition[v]] += 1
+		if len(isCharged) > 0 and isCharged[v]:
+			fragmentCharges[partition[v]].append(v)
+
+		for u in G.neighbors(v):
+			edgeCuts[v][partition[u]] += G.weight(v, u)
+
 		#charges should be still valid
 		assert(chargeAllowed(v,partition[v]))
 		#no gaps should be left
 		assert(not gapAt(v,partition[v]))
+
+	assert(sum(fragmentSizes) == G.numberOfNodes())
+	assert(max([len(chargeList) for chargeList in fragmentCharges]) <= 1)
 
 	#now, build heap of all other nodes and handle size constraints
 	maxGain = [- float('inf') for v in G.nodes()]
@@ -168,7 +181,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 					maxTarget[v] = target
 			if maxGain[v] == -float('inf'):
 				#now we have a problem. 
-				raise RuntimeError("v:"+str(v)+"partition"+str(partition))
+				raise RuntimeError("k:"+str(k)+",maxBlockSize:"+str(maxBlockSize)+",v:"+str(v)+", partition"+str(partition))
 
 			## new partition necessary
 			#maxTarget[v] = createNewFragment()
@@ -218,4 +231,5 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 				heappush(heap, (-maxGain[node], node))
 
 	assert(max(fragmentSizes) <= maxBlockSize)
+	assert(max([len(chargeList) for chargeList in fragmentCharges]) <= 1)
 	return partition
