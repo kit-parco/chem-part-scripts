@@ -120,14 +120,29 @@ class TestChempartlib(unittest.TestCase):
 	def test_repairPartition(self):
 		runs = 100
 		for run in range(runs):
+			# generating random graph
 			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
 			n = G.numberOfNodes()
 			k = random.randint(2,int(n/2))
 			epsilon = random.random()
+
+			#generating random partition, possibly invalid
 			badPartition = partitioning.Partition(n)
 			badPartition.setUpperBound(k)
-			for i in range(n):
-				badPartition.moveToSubset(random.randint(0,k-1), i)
+
+			nodesLeft = set(G.nodes())
+			
+			for f in range(k):
+				fragmentSize = random.randint(1, len(nodesLeft) - (k-f) + 1) if f < k - 1 else len(nodesLeft)
+				fragment = random.sample(nodesLeft, fragmentSize)
+				for i in fragment:
+					badPartition.moveToSubset(f, i)
+					nodesLeft.remove(i)
+
+			badPartition.compact()
+			self.assertTrue(badPartition.numberOfSubsets() == k)
+
+			print("n:",n, ", k:", k, "epsilon:",epsilon)
 			repaired = chempartlib.repairPartition(G, badPartition, epsilon)
 			self.assertTrue(chempartlib.partitionValid(G, repaired, math.ceil(n/k)*(1+epsilon)))
 
