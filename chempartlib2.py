@@ -250,11 +250,16 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidG
             initial = dynamic
     except ValueError:
         initial = greedy
-    # Problem: The single node repair in C++ may create invalid partitions.
+    # Problem: The gap repair in C++ may create invalid partitions.
     # Better to not use it and repair in Python.
     mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, avoidGaps, initial)
     mlp.run()
-    return repairPartition(G, mlp.getPartition(), imbalance, isCharged)
+    #print("ML partitioner completed.")
+    part = mlp.getPartition()
+    #print("Partition recovered.")
+    part = repairPartition(G, mlp.getPartition(), imbalance, isCharged)
+    #print("Repair step completed.")
+    return part
 
 
 # In[ ]:

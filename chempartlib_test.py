@@ -105,15 +105,23 @@ class TestChempartlib(unittest.TestCase):
 
 	def test_mlPartition(self):
 		runs = 100
+		setLogLevel('DEBUG')
 		for run in range(runs):
 			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
+			numComp = components.ParallelConnectedComponents(G).run().numberOfComponents()
+
 			n = G.numberOfNodes()
 			k = random.randint(2,int(n/2))
 			epsilon = random.random()
 
 			chargedNodes = random.sample(G.nodes(), int(k*0.8))
 			isCharged = [v in chargedNodes for v in G.nodes()]
-			part = chempartlib.mlPartition(G, k, epsilon, isCharged)
+			if numComp > 1:
+				with self.assertRaises(RuntimeError):
+					part = chempartlib.mlPartition(G, k, epsilon, isCharged)
+				continue
+			else:
+				part = chempartlib.mlPartition(G, k, epsilon, isCharged)
 			self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged))
 			self.assertEqual(part.numberOfSubsets(), k)
 
@@ -141,8 +149,7 @@ class TestChempartlib(unittest.TestCase):
 
 			badPartition.compact()
 			self.assertTrue(badPartition.numberOfSubsets() == k)
-
-			print("n:",n, ", k:", k, "epsilon:",epsilon)
+			
 			repaired = chempartlib.repairPartition(G, badPartition, epsilon)
 			self.assertTrue(chempartlib.partitionValid(G, repaired, math.ceil(n/k)*(1+epsilon)))
 
