@@ -244,18 +244,23 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidG
     greedy = greedyPartition(G, k, imbalance, isCharged)
     try:
         dynamic = dpPartition(G, k, imbalance, isCharged)
-        if partitioning.computeEdgeCut(greedy, G) < partitioning.computeEdgeCut(dynamic, G):
+        if partitioning.computeEdgeCut(greedy, G) < partitioning.computeEdgeCut(dynamic, G) and len(set(greedy)) == k:
             initial = greedy
         else:
             initial = dynamic
     except ValueError:
-        initial = greedy
+        if len(set(greedy)) == k:
+            initial = greedy
+        else:
+            initial = partitioning.Partition(n)
+            initial.allToOnePartition()
     # Problem: The gap repair in C++ may create invalid partitions.
     # Better to not use it and repair in Python.
     mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, avoidGaps, initial)
     mlp.run()
     #print("ML partitioner completed.")
     part = mlp.getPartition()
+    assert(part.numberOfSubsets() == k)
     #print("Partition recovered.")
     part = repairPartition(G, mlp.getPartition(), imbalance, isCharged)
     #print("Repair step completed.")
