@@ -93,6 +93,10 @@ class TestChempartlib(unittest.TestCase):
 		runs = 100
 		for run in range(runs):
 			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
+			numComp = components.ParallelConnectedComponents(G).run().numberOfComponents()
+			if numComp > 1:
+				continue
+				
 			n = G.numberOfNodes()
 			k = random.randint(2,int(n/2))
 			epsilon = random.random()
