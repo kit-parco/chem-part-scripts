@@ -105,11 +105,10 @@ class TestChempartlib(unittest.TestCase):
 			isCharged = [v in chargedNodes for v in G.nodes()]
 			part = chempartlib.greedyPartition(G, k, epsilon, isCharged)
 			self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged))
-			self.assertEqual(part.numberOfSubsets(), k)
+			self.assertTrue(part.numberOfSubsets() >= k)
 
 	def test_mlPartition(self):
 		runs = 100
-		setLogLevel('DEBUG')
 		for run in range(runs):
 			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
 			numComp = components.ParallelConnectedComponents(G).run().numberOfComponents()

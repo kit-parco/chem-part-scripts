@@ -226,9 +226,9 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 			if maxGain[v] == -float('inf'):
 				#now we have a problem. 
 				raise RuntimeError("k:"+str(k)+",maxBlockSize:"+str(maxBlockSize)+",v:"+str(v)+", partition"+str(partition))
-
+				maxTarget[v] = createNewFragment()
 			## new partition necessary
-			#maxTarget[v] = createNewFragment()
+			
 
 		assert(maxTarget[v] >= 0)
 		assert(maxTarget[v] < len(fragmentCharges))
@@ -277,5 +277,5 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 	assert(i == n)
 	assert(max(fragmentSizes) <= maxBlockSize)
 	assert(max([len(chargeList) for chargeList in fragmentCharges]) <= 1)
-	assert(len(set(partition)) == k)
+	#assert(len(set(partition)) == k)
 	return partition
