@@ -2,6 +2,9 @@ from heapq import *
 import math
 
 def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
+	"""
+	Repairs a given partition to comply with balance, gap and charge constraints
+	"""
 	n = G.numberOfNodes()
 	z = G.upperNodeIdBound()
 	if len(isCharged) > 0:
