@@ -1,1 +1,9 @@
 .ipynb_checkpoints/
+*.part
+*.vmd
+*~
+*.dat
+*.png
+*.tga
+*.zip
+__pycache__/
