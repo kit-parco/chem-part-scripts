@@ -250,8 +250,7 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, minGap
         else:
             initial = partitioning.Partition(n)
             initial.allToOnePartition()
-    # Problem: The gap repair in C++ may create invalid partitions.
-    # Better to not use it and repair in Python.
+    
     mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, minGapSize, initial)
     mlp.run()
     #print("ML partitioner completed.")
@@ -824,24 +823,39 @@ def writePartition(part, path):
     community.PartitionWriter().write(part, path)
 
 
-def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = []):
+def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapSize = 2):
     n = G.numberOfNodes()
     if len(isCharged) == 0:
         isCharged = [False for v in range(G.numberOfNodes())]
     
     sizelimit = int(math.ceil(n / k)*(1+epsilon))
+    result = None
+    resultWeight = float('inf')
 
-    ml = mlPartition(G, k, epsilon, isCharged)
-    ml = repairPartition(G, ml, epsilon, isCharged)
-    ml.compact()
-    result = ml
-    resultWeight = partitioning.computeEdgeCut(result, G)
-    writePartition(ml, 'MultiLevel-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
-    print("Wrote Multilevel partition with", ml.numberOfSubsets(), " fragments and weight", resultWeight)
+    try:
+        ml = mlPartition(G, k, epsilon, isCharged, False, minGapSize)
+        ml = repairPartition(G, ml, epsilon, isCharged)
+        ml.compact()
+        if partitionValid(G, ml, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize):
+            result = ml
+            resultWeight = partitioning.computeEdgeCut(result, G)
+            writePartition(ml, 'MultiLevel-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+            print("Wrote Multilevel partition with", ml.numberOfSubsets(), " fragments and weight", resultWeight)
+    except ValueError as e:
+        pass
+
+    fm = fmPartition(G, k, epsilon, isCharged, minGapSize)
+    fm.compact()
+    cutWeight = partitioning.computeEdgeCut(fm, G)
+    if partitionValid(G, fm, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
+        result = fm
+        resultWeight = cutWeight
+    writePartition(fm, 'Flat-FM-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+    print("Wrote flat FM partition with", fm.numberOfSubsets(), " fragments and weight", resultWeight)
 
     greedy = greedyPartition(G, k, epsilon, isCharged)
     cutWeight = partitioning.computeEdgeCut(greedy, G)
-    if cutWeight < resultWeight:
+    if partitionValid(G, greedy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight and len(set(greedy)) == k:
         result = greedy
         resultWeight = cutWeight
     writePartition(greedy, 'Greedy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -852,7 +866,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = []):
         ka = repairPartition(G, ka, epsilon, isCharged)
         ka.compact()
         cutWeight = partitioning.computeEdgeCut(ka, G)
-        if cutWeight < resultWeight:
+        if partitionValid(G, ka, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
             result = ka
             resultWeight = cutWeight
         writePartition(ka, 'KaHiP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -863,7 +877,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = []):
     try:
         cont = dpPartition(G, k, epsilon, isCharged)
         cutWeight = partitioning.computeEdgeCut(cont, G)
-        if cutWeight < resultWeight:
+        if partitionValid(G, cont, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
             result = cont
             resultWeight = cutWeight
         writePartition(cont, 'DP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -894,8 +908,9 @@ if __name__ == '__main__':
     filename = sys.argv[1]
     k = int(sys.argv[2])
     epsilon = float(sys.argv[3])
+    minGapSize = int(sys.argv[4])
     chargedNodes = []
-    for i in range(4, len(sys.argv)):
+    for i in range(5, len(sys.argv)):
         chargedNodes.append(int(sys.argv[i]))
     
     G = readGraph(filename, Format.METIS)
@@ -907,4 +922,4 @@ if __name__ == '__main__':
 
     Gname = os.path.basename(filename)
 
-    runAndSavePartitions(G, Gname, k, epsilon, isCharged)
+    runAndSavePartitions(G, Gname, k, epsilon, isCharged, minGapSize)
