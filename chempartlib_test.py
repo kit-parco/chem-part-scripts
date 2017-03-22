@@ -50,6 +50,8 @@ class TestChempartlib(unittest.TestCase):
 			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
 			n = G.numberOfNodes()
 			k = random.randint(2,int(n/2))
+			minGapSize = random.randint(0,3)
+
 			epsilon = random.random()
 
 			chargedNodes = random.sample(G.nodes(), int(k*0.8))
@@ -61,7 +63,7 @@ class TestChempartlib(unittest.TestCase):
 					for b in chargedNodes:
 						if part[a] == part[b]:
 							self.assertEqual(a,b)
-				self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged))
+				self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize))
 			except ValueError as e:
 				pass
 
@@ -115,6 +117,7 @@ class TestChempartlib(unittest.TestCase):
 
 			n = G.numberOfNodes()
 			k = random.randint(2,int(n/2))
+			minGapSize = random.randint(0,3)
 			epsilon = random.random()
 
 			chargedNodes = random.sample(G.nodes(), int(k*0.8))
@@ -124,8 +127,35 @@ class TestChempartlib(unittest.TestCase):
 					part = chempartlib.mlPartition(G, k, epsilon, isCharged)
 				continue
 			else:
-				part = chempartlib.mlPartition(G, k, epsilon, isCharged)
-			self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged))
+				part = chempartlib.mlPartition(G, k, epsilon, isCharged, False, minGapSize)
+			self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize))
+			self.assertEqual(part.numberOfSubsets(), k)
+
+	def test_fmPartition(self):
+		runs = 100
+		for run in range(runs):
+			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
+			numComp = components.ParallelConnectedComponents(G).run().numberOfComponents()
+
+			n = G.numberOfNodes()
+			k = random.randint(2,int(n/2))
+			minGapSize = random.randint(0,3)
+			epsilon = random.random()
+
+			chargedNodes = random.sample(G.nodes(), int(k*0.8))
+			isCharged = [v in chargedNodes for v in G.nodes()]
+			if numComp > 1:
+				with self.assertRaises(RuntimeError):
+					part = chempartlib.mlPartition(G, k, epsilon, isCharged)
+				continue
+			else:
+				try:
+					dynamic = chempartlib.dpPartition(G, k, epsilon, isCharged)
+				except ValueError:
+					# if no continuous partition is possible, no good starting point for FM exists
+					continue
+				part = chempartlib.fmPartition(G, k, epsilon, isCharged, minGapSize)
+			self.assertTrue(chempartlib.partitionValid(G, part, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize))
 			self.assertEqual(part.numberOfSubsets(), k)
 
 	def test_repairPartition(self):

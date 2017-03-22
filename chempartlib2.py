@@ -226,7 +226,7 @@ def greedyPartition(G, k, imbalance, isCharged=[]):
 
 # In[ ]:
 
-def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidGaps = False):
+def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, minGapSize =1):
     """
     Use a multi-level approach with Fiduccia-Matheyses to partition G.
 
@@ -243,11 +243,7 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidG
     listOfChargedNodes = [i for i in range(n) if isCharged[i]]
     greedy = greedyPartition(G, k, imbalance, isCharged)
     try:
-        dynamic = dpPartition(G, k, imbalance, isCharged)
-        if partitioning.computeEdgeCut(greedy, G) < partitioning.computeEdgeCut(dynamic, G) and len(set(greedy)) == k:
-            initial = greedy
-        else:
-            initial = dynamic
+        initial = dpPartition(G, k, imbalance, isCharged)
     except ValueError:
         if len(set(greedy)) == k:
             initial = greedy
@@ -256,7 +252,7 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidG
             initial.allToOnePartition()
     # Problem: The gap repair in C++ may create invalid partitions.
     # Better to not use it and repair in Python.
-    mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, avoidGaps, initial)
+    mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, minGapSize, initial)
     mlp.run()
     #print("ML partitioner completed.")
     part = mlp.getPartition()
@@ -266,6 +262,45 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, avoidG
     #print("Repair step completed.")
     return part
 
+def fmPartition(G, k, imbalance, isCharged=[], minGapSize =1):
+    """
+    Use pure Fiduccia-Mattheyses on a DP partition
+
+    Subsets have size at most (1+imbalance)*ceil(n/k)
+    """
+    n = G.numberOfNodes()
+    if len(isCharged) > 0:
+        assert(len(isCharged)==n)
+        if k > 0:
+            assert(sum(isCharged) <= k)
+    else:
+        isCharged = [False for i in range(n)]
+    
+    listOfChargedNodes = [i for i in range(n) if isCharged[i]]
+    greedy = greedyPartition(G, k, imbalance, isCharged)
+
+    try:
+        dynamic = dpPartition(G, k, imbalance, isCharged)
+        initial = dynamic
+    except ValueError:
+        if len(set(greedy)) == k:
+            initial = greedy
+        else:
+            raise ValueError("Could not create a fitting initial partition for " + str(n) + " nodes, " + str(k) + " blocks and epsilon=" + str(imbalance))
+    
+    part = initial
+    #assert(partitionValid(G, part, math.ceil(n/k)*(1+imbalance), isCharged, minGapSize))
+    dummyWeights = [1 for i in range(n)]
+    partitioning.MultiLevelPartitioner.fiducciaMattheysesStep(G, part, imbalance, listOfChargedNodes, dummyWeights, minGapSize)
+    gain = 1
+    while gain > 0:
+        gain = partitioning.MultiLevelPartitioner.fiducciaMattheysesStep(G, part, imbalance, listOfChargedNodes, dummyWeights, minGapSize)
+
+    assert(part.numberOfSubsets() == k)
+    #print("Partition recovered.")
+    #part = repairPartition(G, mlp.getPartition(), imbalance, isCharged)
+    #print("Repair step completed.")
+    return part
 
 # In[ ]:
 
@@ -434,7 +469,7 @@ def exportToGephi(G, xcoords, ycoords, part):
 
 # In[ ]:
 
-def partitionValid(G, partition, maxBlockSize = 0, isCharged = []):
+def partitionValid(G, partition, maxBlockSize = 0, isCharged = [], minGapSize = 2):
     """
     Returns True if the given partition fulfills the size, charge and gap constraint, False otherwise.
     """
@@ -469,10 +504,11 @@ def partitionValid(G, partition, maxBlockSize = 0, isCharged = []):
             else:
                 chargedFragments.add(partition[v])
     
-        # partition also invalid if gaps of size 1 exist
-        if G.hasNode(v+2) and partition[v+2] == partition[v] and G.hasNode(v+1) and partition[v+1] != partition[v]:
-            print("Nodes", v, "and", v+2, "are in fragment", partition[v], "but", v+1, "is in fragment", partition[v+1])
-            return False
+        # partition also invalid if gaps smaller than minGapSize exist
+        for gapSize in range(1,minGapSize):
+            if G.hasNode(v+gapSize+1) and partition[v+gapSize+1] == partition[v] and G.hasNode(v+gapSize) and partition[v+gapSize] != partition[v]:
+                print("Nodes", v, "and", v+gapSize+1, "are in fragment", partition[v], "but", v+gapSize, "is in fragment", partition[v+gapSize])
+                return False
     
         # partition invalid if fragment is larger than allowed
         if not partition[v] in fragmentSizes:
@@ -686,7 +722,7 @@ def runAndPrintExperiments(epsilon = 0.2, Gnames = ["ubiquitin", "bubble", "br",
 # In[ ]:
 
 def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2]):
-    pathPrefix = "../../input/"
+    pathPrefix = "/home/moritzl/ChemPart/"
     graphSuffix = "_complete.graph"
     chargeSuffix = "_charges.resid"
     algoList = ['ml', 'greedy', 'ka', 'naive', 'cont']
