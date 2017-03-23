@@ -15,7 +15,7 @@ standard_library.install_aliases()
 
 from networkit import *
 from betterRepair import repairPartition
-import math, sys, subprocess, functools, operator, time, random, os
+import math, sys, subprocess, functools, operator, time, random, os, argparse
 
 
 # In[ ]:
@@ -844,14 +844,17 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
     except ValueError as e:
         pass
 
-    fm = fmPartition(G, k, epsilon, isCharged, minGapSize)
-    fm.compact()
-    cutWeight = partitioning.computeEdgeCut(fm, G)
-    if partitionValid(G, fm, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
-        result = fm
-        resultWeight = cutWeight
-    writePartition(fm, 'Flat-FM-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
-    print("Wrote flat FM partition with", fm.numberOfSubsets(), " fragments and weight", resultWeight)
+    try:
+        fm = fmPartition(G, k, epsilon, isCharged, minGapSize)
+        fm.compact()
+        cutWeight = partitioning.computeEdgeCut(fm, G)
+        if partitionValid(G, fm, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
+            result = fm
+            resultWeight = cutWeight
+        writePartition(fm, 'Flat-FM-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+        print("Wrote flat FM partition with", fm.numberOfSubsets(), " fragments and weight", resultWeight)
+    except ValueError as e:
+        pass
 
     greedy = greedyPartition(G, k, epsilon, isCharged)
     cutWeight = partitioning.computeEdgeCut(greedy, G)
@@ -893,32 +896,45 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
     except ValueError as e:
         pass
     
-    naive = naivePartition(G, k)
-    naive = repairPartition(G, naive, 0, isCharged)
-    cutWeight = partitioning.computeEdgeCut(naive, G)
-    writePartition(naive, 'Naive-k-'+str(k)+'-'+Gname+'.part')
-    print("Wrote naive partition with", naive.numberOfSubsets(), " fragments and weight", cutWeight)
+    try:
+        naive = naivePartition(G, k)
+        naive = repairPartition(G, naive, 0, isCharged)
+        cutWeight = partitioning.computeEdgeCut(naive, G)
+        writePartition(naive, 'Naive-k-'+str(k)+'-'+Gname+'.part')
+        print("Wrote naive partition with", naive.numberOfSubsets(), " fragments and weight", cutWeight)
+    except ValueError as e:
+        pass
 
-    cutWeight = partitioning.computeEdgeCut(result, G)
-    writePartition(result, 'Best-k-'+str(k)+'-'+Gname+'.part')
-    print("Wrote selected partition with", result.numberOfSubsets(), " fragments and weight", cutWeight)
+    if result != None:
+        cutWeight = partitioning.computeEdgeCut(result, G)
+        writePartition(result, 'Best-k-'+str(k)+'-'+Gname+'.part')
+        print("Wrote selected partition with", result.numberOfSubsets(), " fragments and weight", cutWeight)
+    else:
+        print("Could not find a feasible partition given these constraints!")
     
 
 if __name__ == '__main__':
-    filename = sys.argv[1]
-    k = int(sys.argv[2])
-    epsilon = float(sys.argv[3])
-    minGapSize = int(sys.argv[4])
-    chargedNodes = []
-    for i in range(5, len(sys.argv)):
-        chargedNodes.append(int(sys.argv[i]))
+    parser = argparse.ArgumentParser(description='Partition graph files of proteines into fragments.')
+    parser.add_argument('--numParts', metavar='k', type=int, default=10)
+    parser.add_argument('--maxImbalance', metavar='epsilon', type=float, default=0.05)
+    parser.add_argument('--minGapSize', metavar='g', type=int, choices=[1,2,3], default=1)
+    parser.add_argument('--chargedNodes', type=int, nargs='*')
+    parser.add_argument('filename')
+    args = parser.parse_args()
+
+    filename = args.filename
+    k = args.numParts
+    epsilon = args.maxImbalance
+    minGapSize = args.minGapSize
+    chargedNodes = args.chargedNodes
     
     G = readGraph(filename, Format.METIS)
     n = G.numberOfNodes()
     isCharged = [False for i in range(n)]
-    for c in chargedNodes:
-        assert(c < n)
-        isCharged[c] = True
+    if (chargedNodes):
+        for c in chargedNodes:
+            assert(c < n)
+            isCharged[c] = True
 
     Gname = os.path.basename(filename)
 
