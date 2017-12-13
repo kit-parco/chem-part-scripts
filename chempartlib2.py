@@ -94,7 +94,7 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
         
         # calculate optimal next fragment
         for j in range(1,k):
-            predList = [table[l][j-1] + costArray[i-l-1] for l in range(windowStart, i-minBlockSize+1)]
+            predList = [abs(table[l][j-1] + costArray[i-l-1]) for l in range(windowStart, i-minBlockSize+1)]
             if (len(predList) > 0):
                 minPred = min(predList)
                 table[i][j] = minPred
