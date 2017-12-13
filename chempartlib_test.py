@@ -67,6 +67,55 @@ class TestChempartlib(unittest.TestCase):
 			except ValueError as e:
 				pass
 
+	def test_dpPartitionNegativeWeights(self):
+		runs = 100
+		absSum = 0
+		absSumNaive = 0
+		for run in range(runs):
+			G = generators.ErdosRenyiGenerator(random.randint(10,100), random.random(), False).generate()
+			if run == 0:
+				G = readGraph('ubiquitin_complete.graph', Format.METIS)
+
+			n = G.numberOfNodes()
+			k = random.randint(2,int(n/2))
+			epsilon = random.random()
+
+			GWeighted = Graph(n, True)
+			for edge in G.edges():
+				randomWeight = random.random()*6-3
+				GWeighted.addEdge(edge[0], edge[1], randomWeight)
+
+			G = GWeighted
+
+			part1 = chempartlib.dpPartition(G, k, epsilon, [])
+			sizes = part1.subsetSizes()
+			self.assertTrue(max(sizes) <= math.ceil(n/k)*(1+epsilon))
+			self.assertEqual(len(sizes), k)
+			self.assertEqual(part1.numberOfSubsets(), k)
+			self.assertTrue(partitioning.computeImbalance(part1, G) <= 1+epsilon)# if this fails after the previous size check worked, your version of networkit is probably outdated
+			self.assertTrue(chempartlib.partitionValid(G, part1, math.ceil(n/k)*(1+epsilon)))
+
+			naive = chempartlib.naivePartition(G, k)
+			absSum += abs(partitioning.computeEdgeCut(part1, G))
+			absSumNaive += abs(partitioning.computeEdgeCut(naive, G))
+			#print("Run",run,": Naive", partitioning.computeEdgeCut(naive, G), ", DP:", partitioning.computeEdgeCut(part1, G))
+			#if naive.numberOfSubsets() == k:
+			#	self.assertTrue(abs(partitioning.computeEdgeCut(part1, G)) <= abs(partitioning.computeEdgeCut(naive, G)))
+
+			part2 = chempartlib.dpPartition(G, k, epsilon, [], True)
+			sizes = part2.subsetSizes()
+			self.assertTrue(max(sizes) <= math.ceil(n/k)*(1+epsilon))
+			self.assertEqual(len(sizes), k)
+			self.assertTrue(min(sizes) >= math.floor(n / k)*(1-epsilon))
+			self.assertTrue(partitioning.computeImbalance(part2, G) <= 1+epsilon)
+			self.assertTrue(chempartlib.partitionValid(G, part2, math.ceil(n/k)*(1+epsilon)))
+
+			naiveSizes = naive.subsetSizes()
+			#if len(naiveSizes) == k and min(naiveSizes) >= math.floor(n / k)*(1-epsilon):
+			#	self.assertTrue(abs(partitioning.computeEdgeCut(part2, G)) <= abs(partitioning.computeEdgeCut(naive, G)))
+		print("AbsSum:",absSum, ", AbsSumNaive:",absSumNaive)
+
+
 	def test_dpPartitionInputCheck(self):
 		G = generators.ErdosRenyiGenerator(100, 0.1, False).generate()
 		with self.assertRaises(AssertionError):
