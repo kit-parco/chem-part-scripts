@@ -20,7 +20,7 @@ def repairPartition(G, partition, imbalance = 0.2, isCharged = []):
 		raise ValueError("Partition contains "+str(partition.numberOfElements())+" elements, but Graph contains "+str(n))
 
 	partition.compact()
-	fragmentSet = set(partition)
+	fragmentSet = set(partition.getVector())
 	k = len(fragmentSet)
 	maxBlockSize = int(math.ceil(n / k)*(1+imbalance))
 
