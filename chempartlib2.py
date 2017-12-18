@@ -837,7 +837,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
         fm = fmPartition(G, k, epsilon, isCharged, minGapSize)
         fm.compact()
         cutWeight = partitioning.computeEdgeCut(fm, G)
-        if partitionValid(G, fm, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
+        if partitionValid(G, fm, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and abs(cutWeight) < abs(resultWeight):
             result = fm
             resultWeight = cutWeight
         writePartition(fm, 'Flat-FM-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -850,7 +850,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
     try:
         greedy = greedyPartition(G, k, epsilon, isCharged)
         cutWeight = partitioning.computeEdgeCut(greedy, G)
-        if partitionValid(G, greedy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight and greedy.numberOfSubsets() == k:
+        if partitionValid(G, greedy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and abs(cutWeight) < abs(resultWeight) and greedy.numberOfSubsets() == k:
             result = greedy
             resultWeight = cutWeight
         writePartition(greedy, 'Greedy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -863,7 +863,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
         ka = repairPartition(G, ka, epsilon, isCharged)
         ka.compact()
         cutWeight = partitioning.computeEdgeCut(ka, G)
-        if partitionValid(G, ka, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
+        if partitionValid(G, ka, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and abs(cutWeight) < abs(resultWeight):
             result = ka
             resultWeight = cutWeight
         writePartition(ka, 'KaHiP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -874,7 +874,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
     try:
         cont = dpPartition(G, k, epsilon, isCharged)
         cutWeight = partitioning.computeEdgeCut(cont, G)
-        if partitionValid(G, cont, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight:
+        if partitionValid(G, cont, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and abs(cutWeight) < abs(resultWeight):
             result = cont
             resultWeight = cutWeight
         writePartition(cont, 'DP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -885,6 +885,9 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
     try:
         contLegacy = dpPartition(G, k, epsilon, isCharged, True)
         cutWeight = partitioning.computeEdgeCut(contLegacy, G)
+        if partitionValid(G, contLegacy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and abs(cutWeight) < abs(resultWeight):
+            result = contLegacy
+            resultWeight = cutWeight
         writePartition(contLegacy, 'DP-legacy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
         print("Wrote legacy DP partition with", contLegacy.numberOfSubsets(), " fragments and weight", cutWeight)
     except ValueError as e:
@@ -894,6 +897,9 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
         naive = naivePartition(G, k)
         naive = repairPartition(G, naive, 0, isCharged)
         cutWeight = partitioning.computeEdgeCut(naive, G)
+        if partitionValid(G, naive, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and abs(cutWeight) < abs(resultWeight):
+            result = naive
+            resultWeight = cutWeight
         writePartition(naive, 'Naive-k-'+str(k)+'-'+Gname+'.part')
         print("Wrote naive partition with", naive.numberOfSubsets(), " fragments and weight", cutWeight)
     except ValueError as e:
