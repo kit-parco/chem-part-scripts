@@ -184,7 +184,7 @@ def greedyPartition(G, k, imbalance, isCharged=[]):
     def getWeight(edge):
         return G.weight(edge[0], edge[1])
     
-    sortedEdges = sorted(G.edges(), key=getWeight)
+    sortedEdges = sorted(G.edges(), key=lambda x: abs(getWeight(x)))
     
     # merge heaviest edge, as long as allowed
     while len(sortedEdges) > 0 and remainingFragments > k:
@@ -232,7 +232,7 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, minGap
     try:
         initial = dpPartition(G, k, imbalance, isCharged)
     except ValueError:
-        if len(set(greedy)) == k:
+        if greedy.numberOfSubsets() == k:
             initial = greedy
         else:
             initial = partitioning.Partition(n)
@@ -269,7 +269,7 @@ def fmPartition(G, k, imbalance, isCharged=[], minGapSize =1):
         dynamic = dpPartition(G, k, imbalance, isCharged)
         initial = dynamic
     except ValueError:
-        if len(set(greedy)) == k:
+        if greedy.numberOfSubsets() == k:
             initial = greedy
         else:
             raise ValueError("Could not create a fitting initial partition for " + str(n) + " nodes, " + str(k) + " blocks and epsilon=" + str(imbalance))
@@ -850,7 +850,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
     try:
         greedy = greedyPartition(G, k, epsilon, isCharged)
         cutWeight = partitioning.computeEdgeCut(greedy, G)
-        if partitionValid(G, greedy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight and len(set(greedy)) == k:
+        if partitionValid(G, greedy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight and greedy.numberOfSubsets() == k:
             result = greedy
             resultWeight = cutWeight
         writePartition(greedy, 'Greedy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
@@ -869,7 +869,7 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
         writePartition(ka, 'KaHiP-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
         print("Wrote KaHiP partition with", ka.numberOfSubsets(), " fragments and weight", cutWeight)
     except FileNotFoundError as e:
-        pass
+        print("KaHiP not available:", e)
 
     try:
         cont = dpPartition(G, k, epsilon, isCharged)
