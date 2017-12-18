@@ -237,7 +237,7 @@ def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, minGap
         else:
             initial = partitioning.Partition(n)
             initial.allToOnePartition()
-    
+
     mlp = partitioning.MultiLevelPartitioner(G, k, imbalance, bisectRecursively, listOfChargedNodes, minGapSize, initial)
     mlp.run()
     #print("ML partitioner completed.")
@@ -828,6 +828,8 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
             resultWeight = partitioning.computeEdgeCut(result, G)
             writePartition(ml, 'MultiLevel-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
             print("Wrote Multilevel partition with", ml.numberOfSubsets(), " fragments and weight", resultWeight)
+    except AttributeError as e:
+        print("No Multilevel partitioner available:", e)
     except ValueError as e:
         pass
 
@@ -840,16 +842,21 @@ def runAndSavePartitions(G, Gname, k = 8, epsilon = 0.2, isCharged = [], minGapS
             resultWeight = cutWeight
         writePartition(fm, 'Flat-FM-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
         print("Wrote flat FM partition with", fm.numberOfSubsets(), " fragments and weight", resultWeight)
+    except AttributeError as e:
+        print("No FM available: ", e)
     except ValueError as e:
         pass
 
-    greedy = greedyPartition(G, k, epsilon, isCharged)
-    cutWeight = partitioning.computeEdgeCut(greedy, G)
-    if partitionValid(G, greedy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight and len(set(greedy)) == k:
-        result = greedy
-        resultWeight = cutWeight
-    writePartition(greedy, 'Greedy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
-    print("Wrote Greedy partition with", greedy.numberOfSubsets(), " fragments and weight", cutWeight)
+    try:
+        greedy = greedyPartition(G, k, epsilon, isCharged)
+        cutWeight = partitioning.computeEdgeCut(greedy, G)
+        if partitionValid(G, greedy, math.ceil(n/k)*(1+epsilon), isCharged, minGapSize) and cutWeight < resultWeight and len(set(greedy)) == k:
+            result = greedy
+            resultWeight = cutWeight
+        writePartition(greedy, 'Greedy-k-'+str(k)+'-imbalance-'+str(epsilon)+'-'+Gname+'.part')
+        print("Wrote Greedy partition with", greedy.numberOfSubsets(), " fragments and weight", cutWeight)
+    except ValueError as e:
+        pass
 
     try:
         ka = kaHiPWrapper(G, k, epsilon)
