@@ -290,7 +290,7 @@ def fmPartition(G, k, imbalance, isCharged=[], minGapSize =1):
 
 # In[ ]:
 
-def kaHiPWrapper(G, k, imbalance = 0.2, pathToKaHiP = '/home/moritzl/Gadgets/KaHIP/deploy/kaffpa', multiple=False):
+def kaHiPWrapper(G, k, imbalance = 0.2, pathToKaHiP = '../KaHIP/deploy/kaffpa', multiple=False):
     """
     Calls KaHiP, an external partitioner.
     """
@@ -707,8 +707,7 @@ def runAndPrintExperiments(epsilon = 0.2, Gnames = ["ubiquitin", "bubble", "br",
 
 # In[ ]:
 
-def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2]):
-    pathPrefix = "/home/moritzl/ChemPart/"
+def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2], pathPrefix = "./"):
     graphSuffix = "_complete.graph"
     chargeSuffix = "_charges.resid"
     algoList = ['ml', 'greedy', 'ka', 'naive', 'cont']
@@ -717,8 +716,8 @@ def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2]):
     maxIterations = 100
     
     for Gname in Gnames:
-        G = readGraph(pathPrefix + Gname + graphSuffix, Format.METIS)
-        potentiallyCharged = readCharges(pathPrefix + Gname + chargeSuffix)
+        G = readGraph(os.path.join(pathPrefix,  Gname + graphSuffix), Format.METIS)
+        potentiallyCharged = readCharges(os.path.join(pathPrefix,  Gname + chargeSuffix))
         
         n = G.numberOfNodes()
         kList = []
@@ -768,9 +767,7 @@ def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2]):
                         f.write('\t'.join(lineDict[algo])+'\n')
 
 
-# In[ ]:
-
-def averageLogs(runs, Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp"]):
+def averageLogs(runs, Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp"], outputSuffix='-results-averaged.dat'):
     for Gname in Gnames:
 
         sumEntries = []
@@ -799,7 +796,7 @@ def averageLogs(runs, Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp"]):
                     lineNumber += 1
         assert(len(sumEntries) == len(numEntries))
 
-        outputname = Gname+'-results-averaged.dat'
+        outputname = Gname+outputSuffix
         with open(outputname, 'w') as f:
             for rowIndex in range(len(sumEntries)):
                 assert(len(sumEntries[rowIndex]) == len(numEntries[rowIndex]))
