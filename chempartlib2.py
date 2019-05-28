@@ -1,11 +1,6 @@
-# In[ ]:
-
 from networkit import *
 from betterRepair import repairPartition
 import math, sys, subprocess, functools, operator, time, random, os, argparse
-
-
-# In[ ]:
 
 def getCutWeight(G, part, v, block):
     n = G.numberOfNodes()
@@ -711,7 +706,7 @@ def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2], pathP
     graphSuffix = "_complete.graph"
     chargeSuffix = "_charges.resid"
     algoList = ['ml', 'greedy', 'ka', 'naive', 'cont']
-    Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp", "fmo"]
+    Gnames = ["ubiquitin", "bubble", "br", "fmo", "gfp"]
     #kList = [2**i for i in range(1,6)]
     maxIterations = 100
     
