@@ -11,9 +11,6 @@ def getCutWeight(G, part, v, block):
     
     return sum([G.weight(v, u) for u in G.nodes() if G.hasEdge(v,u) and part[u] == block])
 
-
-# In[ ]:
-
 def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
     """
     Partition G into subsets of size at most math.ceil(n/k)*(1+imbalance) and with consecutive node ids.
@@ -135,9 +132,6 @@ def dpPartition(G, k, imbalance, isCharged=[], useLowerBounds=False):
     
     return result
 
-
-# In[ ]:
-
 def naivePartition(G, k):
     """
     Chop a new fragment off G every n/k nodes
@@ -151,9 +145,6 @@ def naivePartition(G, k):
         naivePart.moveToSubset(int(i/math.ceil(n/k)), i)
     naivePart.compact()
     return naivePart
-
-
-# In[ ]:
 
 def greedyPartition(G, k, imbalance, isCharged=[]):
     """
@@ -204,9 +195,6 @@ def greedyPartition(G, k, imbalance, isCharged=[]):
     
     part.compact()
     return part
-
-
-# In[ ]:
 
 def mlPartition(G, k, imbalance, isCharged=[], bisectRecursively = False, minGapSize =1):
     """
@@ -282,8 +270,6 @@ def fmPartition(G, k, imbalance, isCharged=[], minGapSize =1):
     #part = repairPartition(G, mlp.getPartition(), imbalance, isCharged)
     #print("Repair step completed.")
     return part
-
-# In[ ]:
 
 def kaHiPWrapper(G, k, imbalance = 0.2, pathToKaHiP = '../KaHIP/deploy/kaffpa', multiple=False):
     """
@@ -503,9 +489,6 @@ def partitionValid(G, partition, maxBlockSize = 0, isCharged = [], minGapSize = 
     # no reason to complain found, partition is valid
     return True
 
-
-# In[ ]:
-
 def chargesValid(G, klist, minEpsilon, isCharged):
     assert(type(klist) is list)
     assert(type(minEpsilon) is float)
@@ -517,9 +500,6 @@ def chargesValid(G, klist, minEpsilon, isCharged):
         except ValueError as e:
             return False
     return True
-
-
-# In[ ]:
 
 def comparePartitionQuality(G, k, imbalance, chargedNodes = set(), silent=False):
     n = G.numberOfNodes()
@@ -702,7 +682,7 @@ def runAndPrintExperiments(epsilon = 0.2, Gnames = ["ubiquitin", "bubble", "br",
 
 # In[ ]:
 
-def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2], pathPrefix = "./"):
+def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2], pathPrefix = "./", silent=False):
     graphSuffix = "_complete.graph"
     chargeSuffix = "_charges.resid"
     algoList = ['ml', 'greedy', 'ka', 'naive', 'cont']
@@ -748,7 +728,7 @@ def runAndLogExperiments(runs = 1, charges = False, epsilonList=[0.1,0.2], pathP
                         lineDict[algo] = [str(k)]
 
                     for epsilon in epsilonList:
-                        qualities = comparePartitionQuality(G, k, epsilon, chargedNodes, True)
+                        qualities = comparePartitionQuality(G, k, epsilon, chargedNodes, silent)
                         for algo in algoList:
                             if algo in qualities:
                                 lineDict[algo].append(str(qualities[algo]/qualities['naive']))
