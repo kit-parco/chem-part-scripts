@@ -507,22 +507,22 @@ def comparePartitionQuality(G, k, imbalance, chargedNodes = set(), silent=False)
     isCharged = [v in chargedNodes for v in range(G.numberOfNodes())]
     sizelimit = int(math.ceil(n / k)*(1+imbalance))
     if not silent:
-        print("Size limit:", sizelimit)
+        print("Size limit:", sizelimit, flush=True)
     result = {}
     
     before = time.time()
     ml = mlPartition(G, k, imbalance, isCharged)
     timeML = time.time() - before
     if not silent:
-        print("MultiLevel:", partitioning.computeEdgeCut(ml, G))
-        print("Time:", timeML)
+        print("MultiLevel:", partitioning.computeEdgeCut(ml, G), flush=True)
+        print("Time:", timeML, flush=True)
     if not partitionValid(G, ml, sizelimit, isCharged):
         ml = repairPartition(G, ml, imbalance, isCharged)
         if not silent:
-            print("Repaired Multilevel:", partitioning.computeEdgeCut(ml, G))
+            print("Repaired Multilevel:", partitioning.computeEdgeCut(ml, G), flush=True)
             partitionValid(G, ml, sizelimit, isCharged)
     if not silent:
-        print("Effective k", str(ml.numberOfSubsets()))
+        print("Effective k", str(ml.numberOfSubsets()), flush=True)
         print()
     result['ml'] = partitioning.computeEdgeCut(ml, G)
     
@@ -530,15 +530,15 @@ def comparePartitionQuality(G, k, imbalance, chargedNodes = set(), silent=False)
     greedy = greedyPartition(G, k, imbalance, isCharged)
     timeGreedy = time.time() - before
     if not silent:
-        print("Greedy:", partitioning.computeEdgeCut(greedy, G))
-        print("Time:", timeGreedy)
+        print("Greedy:", partitioning.computeEdgeCut(greedy, G), flush=True)
+        print("Time:", timeGreedy, flush=True)
     if not partitionValid(G, greedy, sizelimit, isCharged):
         greedy = repairPartition(G, greedy, imbalance, isCharged)
         if not silent:
-            print("Repaired Greedy:", partitioning.computeEdgeCut(greedy, G))
+            print("Repaired Greedy:", partitioning.computeEdgeCut(greedy, G), flush=True)
         assert(partitionValid(G, greedy, sizelimit, isCharged))
     if not silent:
-        print("Effective k", str(greedy.numberOfSubsets()))
+        print("Effective k", str(greedy.numberOfSubsets()), flush=True)
         print()
     result['greedy'] = partitioning.computeEdgeCut(greedy, G)
     
@@ -550,18 +550,18 @@ def comparePartitionQuality(G, k, imbalance, chargedNodes = set(), silent=False)
         cont = dpPartition(G, k, imbalance, isCharged)
         timeDP = time.time() - before
         if not silent:
-            print("Dynamic Programming:", partitioning.computeEdgeCut(cont, G))
-            print("Time:", timeDP)
+            print("Dynamic Programming:", partitioning.computeEdgeCut(cont, G), flush=True)
+            print("Time:", timeDP, flush=True)
         if not partitionValid(G, cont, sizelimit, isCharged):
             cont = repairPartition(G, cont, imbalance, isCharged)
             if not silent:
-                print("Repaired Dynamic:", partitioning.computeEdgeCut(cont, G))
+                print("Repaired Dynamic:", partitioning.computeEdgeCut(cont, G), flush=True)
             assert(partitionValid(G, cont, sizelimit, isCharged))
         result['cont'] = partitioning.computeEdgeCut(cont, G)
         if not silent:
-            print("Effective k", str(cont.numberOfSubsets()))
+            print("Effective k", str(cont.numberOfSubsets()), flush=True)
     except ValueError as e:
-        print(e)
+        print(e, flush=True)
 
     print()
         
@@ -569,15 +569,15 @@ def comparePartitionQuality(G, k, imbalance, chargedNodes = set(), silent=False)
     ka = kaHiPWrapper(G, k, imbalance)
     timeKa = time.time() - before
     if not silent:
-        print("Raw KaHIP:", partitioning.computeEdgeCut(ka, G))
-        print("Time:", timeKa)
+        print("Raw KaHIP:", partitioning.computeEdgeCut(ka, G), flush=True)
+        print("Time:", timeKa, flush=True)
     if not partitionValid(G, ka, sizelimit, isCharged):
         ka = repairPartition(G, ka, imbalance, isCharged)
         if not silent:
-            print("Repaired KaHiP:", partitioning.computeEdgeCut(ka, G))
+            print("Repaired KaHiP:", partitioning.computeEdgeCut(ka, G), flush=True)
             partitionValid(G, ka, sizelimit, isCharged)
     if not silent:
-        print("Effective k", str(ka.numberOfSubsets()))
+        print("Effective k", str(ka.numberOfSubsets()), flush=True)
         print()
     result['ka'] = partitioning.computeEdgeCut(ka, G)
     result['bestOfFour'] = min([result[key] for key in result])
@@ -587,20 +587,20 @@ def comparePartitionQuality(G, k, imbalance, chargedNodes = set(), silent=False)
     naive = naivePartition(G, k)
     timeNaive = time.time() - before
     if not silent:
-        print("Naive:", partitioning.computeEdgeCut(naive, G))
-        print("Time:", timeNaive)
+        print("Naive:", partitioning.computeEdgeCut(naive, G), flush=True)
+        print("Time:", timeNaive, flush=True)
     if not partitionValid(G, naive, sizelimit, isCharged):
         naive = repairPartition(G, naive, imbalance, isCharged)        
         if not silent:
-            print("Repaired Naive:", partitioning.computeEdgeCut(naive, G))
+            print("Repaired Naive:", partitioning.computeEdgeCut(naive, G), flush=True)
         assert(partitionValid(G, naive, sizelimit, isCharged))
     if not silent:
-        print("Effective k", str(naive.numberOfSubsets()))
+        print("Effective k", str(naive.numberOfSubsets()), flush=True)
     result['naive'] = partitioning.computeEdgeCut(naive, G)
     result['bestOfFive'] = min([result[key] for key in result])
 
     if not silent:
-        print(str(result['bestOfFour'] / result['naive']))
+        print(str(result['bestOfFour'] / result['naive']), flush=True)
     return result
 
 
